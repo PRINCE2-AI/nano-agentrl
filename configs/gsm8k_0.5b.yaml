@@ -1,0 +1,30 @@
+# Milestone 1: single-turn GRPO on GSM8K with Qwen2.5-0.5B-Instruct.
+# Only fields that differ from nano_agentrl/config.py defaults are listed.
+task: gsm8k
+model_name: Qwen/Qwen2.5-0.5B-Instruct
+seed: 42
+run_dir: runs/gsm8k_0.5b
+
+train_dataset: openai/gsm8k
+eval_splits: [gsm8k_test]
+max_prompt_len: 256
+
+group_size: 8
+temperature: 1.0
+max_new_tokens: 512
+max_turns: 1          # single turn: no search
+stop_strings: []
+
+clip_eps: 0.2
+kl_coef: 0.001
+loss_agg: token_mean
+normalize_std: true
+
+lr: 1.0e-6
+prompts_per_step: 16
+micro_batch_size: 4
+total_steps: 500
+
+wandb_run_name: gsm8k_0.5b
+eval_every: 25
+save_every: 100

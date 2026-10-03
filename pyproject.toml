@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nano-agentrl"
+version = "0.0.1"
+description = "Minimal from-scratch re-implementation of Search-R1 (multi-turn GRPO with search)."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.1",
+    "transformers>=4.44",
+    "datasets>=2.20",
+    "pyyaml>=6.0",
+    "numpy",
+    "fastapi",
+    "uvicorn",
+    "requests",
+    "rank_bm25",
+    "wandb",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+vllm = ["vllm"]
+dense = ["faiss-cpu"]
+trl = ["trl"]
+
+[tool.setuptools.packages.find]
+include = ["nano_agentrl*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Keep pytest's tmp_path inside the repo (gitignored): the system Temp folder can be
+# locked on Windows ("Access is denied: ...\Temp\pytest-of-<user>").
+addopts = "--basetemp=.pytest_tmp"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
