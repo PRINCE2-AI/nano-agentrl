@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Data, indexes, checkpoints, runs (never commit)
+data/
+indexes/
+checkpoints/
+runs/
+wandb/
+papers/
+
+# Secrets
+.env
+
+# Reference material lives in the kit folder, not the repo
+*.pdf
+*.xlsx
