@@ -56,8 +56,12 @@ def get_token_logprobs(
            padding) and position_ids counted over real tokens (left padding stays correct).
         2. Off-by-one shift: logits[:, t] predicts token t + 1, so logits[:, :-1] lines up
            with input_ids[:, 1:]. Token 0 has no prediction and gets 0.
-        3. log_softmax in float32 over the vocab (numerically stable, unlike log(softmax)),
-           then gather the single entry of the token that actually came next.
+        3. log-prob of the token that came next, in float32:
+               log_softmax(x)[y] = x[y] - logsumexp(x)
+           Gathering x[y] and computing logsumexp gives the same number as log_softmax +
+           gather without materializing a second (B, T-1, V) tensor of log-probs. With
+           V ~ 152k (Qwen) that tensor is the largest in training. logsumexp is stable
+           (it subtracts the max first), unlike log(softmax).
         4. Zero every position outside response_mask, so non-policy tokens get no gradient
            (Search-R1 Sec. 3.1, "Loss Masking for Retrieved Tokens").
     """
@@ -71,9 +75,9 @@ def get_token_logprobs(
     pred_logits = logits[:, :-1, :].float()  # (B, T-1, V), float32 for precision
     next_tokens = input_ids[:, 1:]  # (B, T-1)
 
-    # 3. log_softmax over the vocab, then pick the log-prob of the token that came next.
-    all_logprobs = torch.log_softmax(pred_logits, dim=-1)  # (B, T-1, V)
-    token_logprobs = all_logprobs.gather(dim=-1, index=next_tokens.unsqueeze(-1)).squeeze(-1)
+    # 3. log p(y) = logit[y] - logsumexp(logits), without building all V log-probs.
+    token_logits = pred_logits.gather(dim=-1, index=next_tokens.unsqueeze(-1)).squeeze(-1)
+    token_logprobs = token_logits - torch.logsumexp(pred_logits, dim=-1)  # (B, T-1)
 
     # Put a 0 in front for token 0 so the output lines up with input_ids: (B, T)
     first = torch.zeros_like(token_logprobs[:, :1])

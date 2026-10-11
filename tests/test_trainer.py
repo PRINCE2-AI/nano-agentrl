@@ -212,3 +212,31 @@ def test_ablation_script_flags_are_valid_config_fields():
         "seed",
     }
     assert keys <= {f.name for f in dataclasses.fields(Config)}
+
+
+def test_ref_model_on_separate_device(tmp_path):
+    """ref_device puts the frozen reference elsewhere; its log-probs come back to self.device."""
+    tok = make_char_tokenizer()
+    cfg = Config(
+        task="gsm8k",
+        device="cpu",
+        ref_device="cpu",
+        kl_coef=0.1,
+        group_size=2,
+        prompts_per_step=1,
+        max_new_tokens=4,
+        micro_batch_size=1,
+        run_dir=str(tmp_path),
+        gradient_checkpointing=False,
+        use_wandb=False,
+    )
+    trainer = Trainer(
+        cfg,
+        make_tiny_model(len(tok)),
+        tok,
+        make_arithmetic_dataset(4),
+        {},
+        ref_model=make_tiny_model(len(tok)),
+    )
+    assert trainer.ref_device == torch.device("cpu")
+    assert "train/kl" in trainer.train_step()

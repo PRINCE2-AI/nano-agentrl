@@ -168,7 +168,8 @@ class Trainer:
 
         self.ref_model = None
         if ref_model is not None and cfg.kl_coef > 0:
-            self.ref_model = ref_model.to(self.device).eval()
+            self.ref_device = torch.device(cfg.ref_device) if cfg.ref_device else self.device
+            self.ref_model = ref_model.to(self.ref_device).eval()
             self.ref_model.requires_grad_(False)
 
         self.generator = generator or Generator(self.policy, tokenizer, backend="hf")
@@ -299,16 +300,16 @@ class Trainer:
         """Log-probs of the whole batch under `model`, micro-batched, no grad: (B, T)."""
         out = []
         mb = self.cfg.micro_batch_size
+        dev = next(model.parameters()).device  # the reference model may live on another GPU
         for s in range(0, batch["input_ids"].shape[0], mb):
             with self._autocast():
-                out.append(
-                    get_token_logprobs(
-                        model,
-                        batch["input_ids"][s : s + mb],
-                        batch["attention_mask"][s : s + mb],
-                        batch["loss_mask"][s : s + mb],
-                    )
+                lp = get_token_logprobs(
+                    model,
+                    batch["input_ids"][s : s + mb].to(dev),
+                    batch["attention_mask"][s : s + mb].to(dev),
+                    batch["loss_mask"][s : s + mb].to(dev),
                 )
+            out.append(lp.to(self.device))
         return torch.cat(out)
 
     def accumulate_gradients(

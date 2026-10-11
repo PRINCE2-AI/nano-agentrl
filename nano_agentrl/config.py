@@ -26,6 +26,7 @@ class Config:
     seed: int = 42
     run_dir: str = "runs/default"
     device: str = "auto"  # "auto" (cuda if available), "cuda" or "cpu"
+    ref_device: str | None = None  # e.g. "cuda:1": frozen reference model on a 2nd GPU
 
     # --- data ---
     train_dataset: str = "PeterJinGo/nq_hotpotqa_train"

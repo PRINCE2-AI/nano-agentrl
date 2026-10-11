@@ -11,12 +11,15 @@ Re-running with the same run_dir resumes from its latest checkpoint.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Less fragmentation when logits of different lengths come and go (must precede torch import).
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 from nano_agentrl.config import load_config  # noqa: E402
 from nano_agentrl.trainer import build_trainer  # noqa: E402

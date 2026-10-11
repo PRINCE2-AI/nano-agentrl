@@ -1,0 +1,43 @@
+# GSM8K GRPO with Qwen2.5-0.5B-Instruct on a free Kaggle "GPU T4 x2" notebook.
+# Same recipe as gsm8k_0.5b.yaml, sized to fit 2 x 16 GB T4s and Kaggle's 12-hour sessions.
+#
+# Trial on Kaggle with gsm8k_0.5b.yaml: ~4.4 min/step (124 s rollout + 137 s train) and an
+# out-of-memory error at step 2 once Adam allocated its states. Changes here:
+task: gsm8k
+model_name: Qwen/Qwen2.5-0.5B-Instruct
+seed: 42
+run_dir: /kaggle/working/gsm8k_0.5b
+
+train_dataset: openai/gsm8k
+eval_splits: [gsm8k_test]
+eval_num_examples: 100     # 100 greedy test questions per eval (~3-4 min each)
+max_prompt_len: 256
+
+group_size: 8
+temperature: 1.0
+max_new_tokens: 300        # trial mean response length was 235 tokens
+max_turns: 1
+stop_strings: []
+
+clip_eps: 0.2
+kl_coef: 0.001
+loss_agg: token_mean
+normalize_std: true
+
+lr: 1.0e-6
+prompts_per_step: 8        # 8 x 8 = 64 completions per step (was 128): ~2x faster
+micro_batch_size: 2        # smaller logits tensor per forward (V = 152k)
+total_steps: 200
+
+# --- memory / hardware ---
+ref_device: cuda:1         # frozen reference model on the second T4: ~2 GB freed on GPU 0
+bf16: false                # T4 (sm_75) has no bf16; train in fp32
+gradient_checkpointing: true
+use_8bit_adam: false
+use_vllm: false            # HF generate; this repo's vLLM path assumes bf16
+
+use_wandb: true            # only if WANDB_API_KEY is set; metrics.jsonl is always written
+wandb_run_name: gsm8k_0.5b_t4
+eval_every: 25
+save_every: 25
+keep_last_checkpoints: 2   # fp32 checkpoints are ~2 GB; Kaggle keeps ~20 GB of output
