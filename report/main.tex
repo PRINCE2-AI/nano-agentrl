@@ -1,0 +1,117 @@
+% nano-AgentRL report skeleton (arXiv style, single column).
+% Build: pdflatex main && bibtex main && pdflatex main && pdflatex main
+% Every \todo{} marks a number or claim that must come from a real run.
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage[numbers]{natbib}
+
+\newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
+\graphicspath{{../docs/figures/}}
+
+\title{nano-AgentRL: Does RL Make Search Agents Reliable, or Only Accurate?}
+\author{Prince}
+\date{\todo{date}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We re-implement Search-R1~\cite{jin2025searchr1} from scratch: multi-turn GRPO~\cite{shao2024deepseekmath}
+with retrieved-token loss masking, in about 2{,}000 lines of PyTorch on a single GPU.
+We reproduce its accuracy on NQ and HotpotQA (\todo{EM numbers}), and then ask a question
+accuracy alone cannot answer: does the trained agent succeed \emph{consistently}?
+Using pass$^k$~\cite{yao2024taubench} and an LLM-judged failure taxonomy across checkpoints,
+we find \todo{main finding in one sentence}.
+\end{abstract}
+
+\section{Introduction}
+\todo{Motivation: agents are deployed where a single failure matters; accuracy (pass@1)
+hides inconsistency. Contributions: (1) a minimal, readable trainer; (2) a reproduction on
+one GPU; (3) a reliability analysis over training.}
+
+\section{Background}
+\subsection{GRPO}
+For each question $q$, sample $G$ responses $o_1,\dots,o_G$ with rewards $r_i$. The advantage
+of every token of $o_i$ is
+\begin{equation}
+  A_i = \frac{r_i - \operatorname{mean}(r)}{\operatorname{std}(r) + \epsilon}.
+\end{equation}
+With ratio $\rho_{i,t} = \pi_\theta(o_{i,t}\mid q,o_{i,<t}) / \pi_{\text{old}}(o_{i,t}\mid q,o_{i,<t})$,
+the per-token objective is
+\begin{equation}
+  \min\!\big(\rho_{i,t} A_i,\ \operatorname{clip}(\rho_{i,t}, 1-\varepsilon, 1+\varepsilon) A_i\big)
+  - \beta\, \mathbb{D}_{\text{KL}}^{k3}\!\left[\pi_\theta \,\|\, \pi_{\text{ref}}\right],
+\end{equation}
+with the k3 estimator $e^{x} - x - 1$, $x = \log \pi_{\text{ref}} - \log \pi_\theta$~\cite{shao2024deepseekmath}.
+Dr.~GRPO~\cite{liu2025drgrpo} removes the std normalization and the per-sequence length normalization.
+
+\subsection{Search-R1}
+The model interleaves \texttt{<think>}, \texttt{<search>} and \texttt{<answer>}. Retrieved
+documents are appended inside \texttt{<information>} and excluded from the loss.
+
+\subsection{Reliability metrics}
+For $n$ samples with $c$ correct, $\text{pass@}k = 1 - \binom{n-c}{k}/\binom{n}{k}$~\cite{chen2021codex}
+and $\text{pass}^k = \binom{c}{k}/\binom{n}{k}$~\cite{yao2024taubench}.
+
+\section{Implementation}
+\todo{Rollout loop and loss mask (figure from README), precision (fp32 master weights,
+bf16 autocast), micro-batching that is exact for every loss aggregation, vLLM weight sync,
+tests that compare against slow reference implementations.}
+
+\section{Reproduction}
+\begin{table}[h]
+\centering
+\begin{tabular}{lcc}
+\toprule
+Model & NQ EM & HotpotQA EM \\
+\midrule
+Qwen2.5-3B-Instruct, direct      & \todo{} & \todo{} \\
+Qwen2.5-3B-Instruct, RAG         & \todo{} & \todo{} \\
+Released Search-R1 (3B-it, GRPO) & \todo{} & \todo{} \\
+Ours (3B-it, GRPO)               & \todo{} & \todo{} \\
+\bottomrule
+\end{tabular}
+\caption{Exact match on 500-question subsets, greedy decoding, BM25 top-3. \todo{paper numbers for reference}}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.7\linewidth]{fig1_em_vs_step.pdf}
+\caption{EM vs training step. \todo{caption}}
+\end{figure}
+
+\section{Reliability Analysis}
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.48\linewidth]{fig2_pass_hat_k.pdf}\hfill
+\includegraphics[width=0.40\linewidth]{fig3_acc_vs_reliability.pdf}
+\caption{Left: pass$^k$ for $k \in \{1,2,4,8\}$ over training. Right: accuracy vs reliability. \todo{caption}}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.6\linewidth]{fig5_failure_taxonomy.pdf}
+\caption{Failure taxonomy per checkpoint. Judge agreement with 50 hand labels: \todo{accuracy, $\kappa$}.}
+\end{figure}
+
+\todo{Findings: gap pass@1 $-$ pass$^8$ over training; which failure types shrink; search
+behaviour (fig.~4).}
+
+\section{Ablations}
+\todo{Table: baseline, no loss mask, Dr.~GRPO, $G=4$ vs $G=8$, base vs instruct. Report
+final EM and pass$^8$ with 3 seeds.}
+
+\section{Limitations}
+Single GPU (smaller batches than Search-R1), BM25 instead of E5 retrieval, 500-question
+subsets, an LLM judge for the taxonomy. \todo{anything else the runs reveal}
+
+\bibliographystyle{plainnat}
+\bibliography{refs}
+\end{document}
