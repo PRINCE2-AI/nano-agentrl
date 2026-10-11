@@ -27,6 +27,7 @@ dev = ["pytest>=8", "ruff>=0.5", "gymnasium>=1.0"]
 vllm = ["vllm"]
 dense = ["faiss-cpu"]
 retriever = ["pyserini"]
+judge = ["anthropic>=1.0"]
 trl = ["trl"]
 
 [tool.setuptools.packages.find]
