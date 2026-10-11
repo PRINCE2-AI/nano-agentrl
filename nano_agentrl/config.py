@@ -25,11 +25,14 @@ class Config:
     model_name: str = "Qwen/Qwen2.5-0.5B-Instruct"
     seed: int = 42
     run_dir: str = "runs/default"
+    device: str = "auto"  # "auto" (cuda if available), "cuda" or "cpu"
 
     # --- data ---
     train_dataset: str = "PeterJinGo/nq_hotpotqa_train"
     eval_splits: list[str] = field(default_factory=lambda: ["nq_dev_500", "hotpotqa_dev_500"])
-    max_prompt_len: int = 512
+    eval_num_examples: int = 500  # per eval split (fixed-seed subset)
+    max_train_examples: int | None = None  # None = use the whole training set
+    max_prompt_len: int = 512  # longer prompts are skipped
 
     # --- rollout ---
     group_size: int = 8  # G responses sampled per question
@@ -65,14 +68,17 @@ class Config:
     warmup_steps: int = 0
     bf16: bool = True
     gradient_checkpointing: bool = True
-    use_8bit_adam: bool = False
+    use_8bit_adam: bool = False  # bitsandbytes AdamW8bit: optimizer states 8x smaller
 
     # --- logging / checkpoints ---
     wandb_project: str = "nano-agentrl"
     wandb_run_name: str | None = None
+    wandb_group: str | None = None
+    use_wandb: bool = True  # also needs WANDB_API_KEY (or `wandb login`); metrics.jsonl always
     log_every: int = 1
     eval_every: int = 50
     save_every: int = 100
+    keep_last_checkpoints: int = 0  # 0 = keep all (the reliability sweep evaluates every one)
     num_sample_trajectories: int = 4
 
     def __post_init__(self) -> None:
