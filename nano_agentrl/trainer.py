@@ -225,7 +225,9 @@ class Trainer:
     def encode_prompt(self, question: str) -> list[int]:
         if question not in self._prompt_cache:
             template = gsm8k_prompt if self.cfg.task == "gsm8k" else search_r1_prompt
-            text = build_chat_prompt(self.tokenizer, template(question))
+            text = template(question)
+            if self.cfg.use_chat_template:
+                text = build_chat_prompt(self.tokenizer, text)
             ids = self.tokenizer(text, add_special_tokens=False)["input_ids"]
             self._prompt_cache[question] = ids[-self.cfg.max_prompt_len :]
         return self._prompt_cache[question]
@@ -271,7 +273,7 @@ class Trainer:
         """Multi-turn generate -> search -> continue (rollout.py); env tokens get mask 0."""
         if self.retriever is None:
             raise RuntimeError("task 'search' needs a retriever (see nano_agentrl/retriever)")
-        return run_search_rollouts(
+        trajectories = run_search_rollouts(
             self.generator,
             self.tokenizer,
             self.retriever,
@@ -285,6 +287,10 @@ class Trainer:
             max_obs_tokens=self.cfg.max_obs_tokens,
             max_total_tokens=self.cfg.max_total_tokens,
         )
+        if not self.cfg.mask_retrieved_tokens:  # ablation: no retrieved-token masking
+            for t in trajectories:
+                t.response_mask = [1] * len(t.response_ids)
+        return trajectories
 
     # ------------------------------------------------------------ policy update
 

@@ -32,7 +32,8 @@ class Config:
     eval_splits: list[str] = field(default_factory=lambda: ["nq_dev_500", "hotpotqa_dev_500"])
     eval_num_examples: int = 500  # per eval split (fixed-seed subset)
     max_train_examples: int | None = None  # None = use the whole training set
-    max_prompt_len: int = 512  # longer prompts are skipped
+    max_prompt_len: int = 512  # longer prompts are left-truncated to this many tokens
+    use_chat_template: bool = True  # False for base models: raw Search-R1 prompt, no chat wrap
 
     # --- rollout ---
     group_size: int = 8  # G responses sampled per question
@@ -48,6 +49,7 @@ class Config:
     # --- retrieval ---
     retriever_url: str = "http://127.0.0.1:8000"
     topk: int = 3
+    mask_retrieved_tokens: bool = True  # ablation: False trains on <information> tokens too
 
     # --- reward ---
     use_format_reward: bool = False  # outcome-only EM by default

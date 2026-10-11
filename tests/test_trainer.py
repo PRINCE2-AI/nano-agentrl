@@ -155,3 +155,60 @@ def test_search_dry_run_end_to_end(tmp_path, config):
     assert samples
     row = json.loads(samples[0].read_text().splitlines()[0])
     assert len(row["response_tokens"]) == len(row["response_mask"])
+
+
+def test_nomask_ablation_trains_on_retrieved_tokens(tmp_path):
+    run_dir = tmp_path / "run"
+    cfg = str(ROOT / "configs/search_0.5b.yaml")
+    train_script.main(
+        [
+            "--config",
+            cfg,
+            "--dry_run",
+            "--run_dir",
+            str(run_dir),
+            "--set",
+            "mask_retrieved_tokens=false",
+            "--total_steps",
+            "1",
+        ]
+    )
+    sample = next((run_dir / "samples").glob("*.jsonl"))
+    rows = [json.loads(line) for line in sample.read_text().splitlines()]
+    assert all(all(m == 1 for m in r["response_mask"]) for r in rows)
+
+
+def test_raw_prompt_without_chat_template(tmp_path):
+    tok = make_char_tokenizer()
+    tok.chat_template = "<|user|>{{ messages[0]['content'] }}<|assistant|>"
+    for use_template, wrapped in ((True, True), (False, False)):
+        cfg = Config(
+            task="search",
+            device="cpu",
+            use_chat_template=use_template,
+            run_dir=str(tmp_path),
+            gradient_checkpointing=False,
+            max_prompt_len=4096,
+        )
+        trainer = Trainer(cfg, make_tiny_model(len(tok)), tok, [], {})
+        text = tok.decode(trainer.encode_prompt("Who wrote Hamlet?"))
+        assert text.startswith("<|user|>") is wrapped
+        assert text.rstrip().endswith("Question: Who wrote Hamlet?") or "<|assistant|>" in text
+
+
+def test_ablation_script_flags_are_valid_config_fields():
+    import dataclasses
+    import re
+
+    script = (ROOT / "scripts/run_ablations.sh").read_text()
+    keys = set(re.findall(r"--set (\w+)=", script))
+    assert keys >= {
+        "mask_retrieved_tokens",
+        "loss_agg",
+        "normalize_std",
+        "group_size",
+        "model_name",
+        "use_chat_template",
+        "seed",
+    }
+    assert keys <= {f.name for f in dataclasses.fields(Config)}
