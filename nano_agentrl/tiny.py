@@ -55,3 +55,15 @@ def make_arithmetic_dataset(n: int, seed: int = 0) -> list[dict]:
         a, b = rng.randint(0, 9), rng.randint(0, 9)
         data.append({"question": f"What is {a}+{b}?", "golds": [str(a + b)]})
     return data
+
+
+def make_tiny_qa_dataset() -> list[dict]:
+    """Questions answerable from retriever.client.TINY_CORPUS (for search-task dry runs)."""
+    return [
+        {"question": "What is the capital of France?", "golds": ["Paris"]},
+        {"question": "Who wrote Hamlet?", "golds": ["William Shakespeare", "Shakespeare"]},
+        {"question": "What is the highest mountain on Earth?", "golds": ["Mount Everest"]},
+        {"question": "What is the capital of Germany?", "golds": ["Berlin"]},
+        {"question": "Who wrote Pride and Prejudice?", "golds": ["Jane Austen"]},
+        {"question": "Who created Python?", "golds": ["Guido", "Guido van Rossum"]},
+    ]

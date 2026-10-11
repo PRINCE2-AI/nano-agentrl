@@ -95,7 +95,8 @@ def run_search_rollouts(
         golds: gold answers per prompt (copied onto each trajectory).
         max_obs_tokens: an <information> observation longer than this is cut (Search-R1's
             max_obs_length), keeping its closing tag so the format stays valid.
-        max_total_tokens: a trajectory whose prompt + response reaches this stops ("length").
+        max_total_tokens: a trajectory stops ("length") once another turn could push prompt +
+            response past this, so the model's context window is never exceeded.
 
     Returns:
         len(prompt_ids) * n trajectories with response_ids, response_mask, text,
@@ -160,7 +161,7 @@ def run_search_rollouts(
         active = []
         for i in sorted(still_active):
             t = trajs[i]
-            if len(t.prompt_ids) + len(t.response_ids) >= max_total_tokens:
+            if len(t.prompt_ids) + len(t.response_ids) + max_new_tokens > max_total_tokens:
                 t.finish_reason = "length"
             else:
                 active.append(i)
