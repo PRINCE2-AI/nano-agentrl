@@ -1,0 +1,46 @@
+# Search-R1 with Qwen2.5-1.5B-Instruct on one 80 GB GPU.
+# Memory budget (approx.): fp32 weights 6 GB + grads 6 GB + Adam 12 GB + bf16 reference 3 GB
+# + vLLM 0.3 x 80 = 24 GB + activations. Fits with gradient checkpointing.
+task: search
+model_name: Qwen/Qwen2.5-1.5B-Instruct
+seed: 42
+run_dir: runs/search_1.5b
+
+train_dataset: PeterJinGo/nq_hotpotqa_train
+eval_splits: [nq_dev_500, hotpotqa_dev_500]
+eval_num_examples: 500
+max_prompt_len: 1024
+
+group_size: 8
+temperature: 1.0
+max_new_tokens: 500
+max_turns: 4
+max_obs_tokens: 500
+max_total_tokens: 4096
+topk: 3
+retriever_url: http://127.0.0.1:8000
+
+clip_eps: 0.2
+kl_coef: 0.001
+loss_agg: token_mean
+normalize_std: true
+ppo_epochs: 1
+
+lr: 1.0e-6
+warmup_steps: 50
+prompts_per_step: 32       # 256 trajectories per step
+micro_batch_size: 4        # halve if you hit OOM in backward; gradients stay identical
+total_steps: 500
+
+# --- memory ---
+bf16: true
+gradient_checkpointing: true
+use_8bit_adam: false       # switch to true (pip install bitsandbytes) to save ~9 GB
+use_vllm: true
+vllm_gpu_memory_utilization: 0.3
+
+wandb_run_name: search_1.5b
+eval_every: 25
+save_every: 50
+keep_last_checkpoints: 0   # fp32 checkpoints are ~6 GB each; set e.g. 10 if disk is tight
+num_sample_trajectories: 8

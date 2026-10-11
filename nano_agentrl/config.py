@@ -43,6 +43,7 @@ class Config:
     max_total_tokens: int = 4096  # prompt + whole multi-turn response
     stop_strings: list[str] = field(default_factory=lambda: ["</search>", "</answer>"])
     use_vllm: bool = False  # HF generate fallback must always work
+    vllm_gpu_memory_utilization: float = 0.4  # GPU fraction vLLM reserves (weights + KV cache)
 
     # --- retrieval ---
     retriever_url: str = "http://127.0.0.1:8000"

@@ -560,13 +560,24 @@ def build_trainer(cfg: Config, dry_run: bool = False) -> Trainer:
 
     generator = None
     if cfg.use_vllm and not dry_run:
-        generator = Generator(policy, tokenizer, backend="vllm", model_name=cfg.model_name)
+        generator = Generator(
+            policy,
+            tokenizer,
+            backend="vllm",
+            model_name=cfg.model_name,
+            vllm_kwargs={"gpu_memory_utilization": cfg.vllm_gpu_memory_utilization},
+        )
 
     retriever = None
-    if cfg.task == "search":
+    if cfg.task == "search" and dry_run:
+        from nano_agentrl.retriever.client import TINY_CORPUS, InMemoryRetriever
+
+        retriever = InMemoryRetriever(TINY_CORPUS)
+    elif cfg.task == "search":
         from nano_agentrl.retriever.client import RetrieverClient
 
         retriever = RetrieverClient(cfg.retriever_url)
+        print(f"[retriever] {retriever.health()}")  # fail fast if the server is not up
 
     trainer = Trainer(
         cfg, policy, tokenizer, train_data, eval_data, ref_model, generator, retriever

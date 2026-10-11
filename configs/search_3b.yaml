@@ -1,0 +1,48 @@
+# Search-R1 with Qwen2.5-3B-Instruct on one 80 GB GPU: the reproduction target.
+# Compare against PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-it-em-grpo.
+# Memory budget (approx.): fp32 weights 12 GB + grads 12 GB + 8-bit Adam 6 GB
+# + bf16 reference 6 GB + vLLM 0.25 x 80 = 20 GB + activations (checkpointed) -> ~65 GB.
+# With fp32 Adam (+18 GB) it would not fit next to vLLM, hence use_8bit_adam.
+task: search
+model_name: Qwen/Qwen2.5-3B-Instruct
+seed: 42
+run_dir: runs/search_3b
+
+train_dataset: PeterJinGo/nq_hotpotqa_train
+eval_splits: [nq_dev_500, hotpotqa_dev_500]
+eval_num_examples: 500
+max_prompt_len: 1024
+
+group_size: 8
+temperature: 1.0
+max_new_tokens: 500
+max_turns: 4
+max_obs_tokens: 500
+max_total_tokens: 4096
+topk: 3
+retriever_url: http://127.0.0.1:8000
+
+clip_eps: 0.2
+kl_coef: 0.001
+loss_agg: token_mean
+normalize_std: true
+ppo_epochs: 1
+
+lr: 1.0e-6
+warmup_steps: 286          # Search-R1: lr_warmup_steps_ratio 0.285 of 1005 steps
+prompts_per_step: 64       # 512 trajectories per step (Search-R1: 512 prompts x 5)
+micro_batch_size: 2        # backward memory knob; does not change the gradient
+total_steps: 1005
+
+# --- memory ---
+bf16: true
+gradient_checkpointing: true
+use_8bit_adam: true        # pip install bitsandbytes
+use_vllm: true
+vllm_gpu_memory_utilization: 0.25
+
+wandb_run_name: search_3b
+eval_every: 50
+save_every: 50             # the reliability sweep evaluates every checkpoint
+keep_last_checkpoints: 0   # ~12 GB each; 20 checkpoints = 240 GB of disk
+num_sample_trajectories: 8

@@ -33,13 +33,22 @@ DRY_RUN_OVERRIDES = {
     "save_every": 2,
     "eval_num_examples": 4,
     "num_sample_trajectories": 2,
-    "train_dataset": "arithmetic",
-    "eval_splits": ["arithmetic_test"],
     "use_wandb": False,
     "use_vllm": False,
     "bf16": False,
     "gradient_checkpointing": False,
     "lr": 1e-3,
+}
+DRY_RUN_TASK_OVERRIDES = {
+    "gsm8k": {"train_dataset": "arithmetic", "eval_splits": ["arithmetic_test"]},
+    # tiny corpus + in-memory BM25 instead of the wiki-18 server; tiny GPT-2 has 1024 positions
+    "search": {
+        "train_dataset": "tinyqa",
+        "eval_splits": ["tinyqa_test"],
+        "max_turns": 2,
+        "max_obs_tokens": 200,
+        "max_total_tokens": 1000,
+    },
 }
 
 
@@ -61,9 +70,10 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE")
     args = parser.parse_args(argv)
 
-    overrides = dict(DRY_RUN_OVERRIDES) if args.dry_run else {}
+    overrides = {}
     if args.dry_run:
-        overrides["run_dir"] = "runs/dry_run"
+        task = load_config(args.config).task
+        overrides = {**DRY_RUN_OVERRIDES, **DRY_RUN_TASK_OVERRIDES[task], "run_dir": "runs/dry_run"}
     overrides.update(parse_overrides(args.set))
     if args.run_dir:
         overrides["run_dir"] = args.run_dir

@@ -137,3 +137,21 @@ def test_dry_run_end_to_end_and_resume(tmp_path):
     steps = [m["step"] for m in read_metrics(run_dir) if "train/reward_mean" in m]
     assert steps == [1, 2, 3]
     assert find_latest_checkpoint(run_dir).name == "step_000003"
+
+
+@pytest.mark.parametrize("config", ["search_0.5b.yaml", "search_3b.yaml"])
+def test_search_dry_run_end_to_end(tmp_path, config):
+    """Multi-turn search training with the in-memory retriever: loss masks, metrics, samples."""
+    run_dir = tmp_path / "run"
+    train_script.main(
+        ["--config", str(ROOT / "configs" / config), "--dry_run", "--run_dir", str(run_dir)]
+    )
+    rows = [m for m in read_metrics(run_dir) if "train/reward_mean" in m]
+    assert [m["step"] for m in rows] == [1, 2]
+    for key in ("train/num_searches", "train/invalid_format_rate", "train/zero_signal_group_frac"):
+        assert key in rows[0]
+    assert any("eval/em_tinyqa" in m for m in read_metrics(run_dir))
+    samples = list((run_dir / "samples").glob("*tinyqa_test.jsonl"))
+    assert samples
+    row = json.loads(samples[0].read_text().splitlines()[0])
+    assert len(row["response_tokens"]) == len(row["response_mask"])

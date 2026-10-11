@@ -1,0 +1,50 @@
+# Milestone 2: Search-R1 with Qwen2.5-0.5B-Instruct. The development run: cheap, fast to
+# iterate on, and it should still show reward and num_searches moving within ~100 steps.
+# Needs the retriever server: python -m nano_agentrl.retriever.server ... --port 8000
+#
+# Search-R1's own GRPO script (train_grpo.sh, Qwen2.5-3B) for reference: 512 prompts/step,
+# n_agent (G) 5, lr 1e-6, warmup ratio 0.285, kl 0.001 (low_var_kl = k3), max_turns 2,
+# max_response_length 500, max_obs_length 500, 1005 steps, 8 GPUs. We scale the batch down
+# for one GPU and keep CLAUDE.md's G = 8 and max_turns = 4.
+task: search
+model_name: Qwen/Qwen2.5-0.5B-Instruct
+seed: 42
+run_dir: runs/search_0.5b
+
+train_dataset: PeterJinGo/nq_hotpotqa_train
+eval_splits: [nq_dev_500, hotpotqa_dev_500]
+eval_num_examples: 500
+max_prompt_len: 1024
+
+group_size: 8
+temperature: 1.0
+max_new_tokens: 500        # per turn (Search-R1 max_response_length)
+max_turns: 4
+max_obs_tokens: 500        # Search-R1 max_obs_length
+max_total_tokens: 4096     # prompt + all turns + all <information> blocks
+topk: 3
+retriever_url: http://127.0.0.1:8000
+
+clip_eps: 0.2
+kl_coef: 0.001
+loss_agg: token_mean
+normalize_std: true
+ppo_epochs: 1
+
+lr: 1.0e-6
+warmup_steps: 30
+prompts_per_step: 32       # 32 x 8 = 256 trajectories per step
+micro_batch_size: 8        # 0.5B is small: 8 sequences of <= 4096 tokens fit per backward
+total_steps: 300
+
+# --- memory ---
+bf16: true                 # bf16 autocast; master weights stay fp32
+gradient_checkpointing: true   # recompute activations in backward: ~3x less activation memory
+use_8bit_adam: false       # 0.5B: fp32 Adam states are only ~4 GB
+use_vllm: true             # fast rollouts; set false to fall back to HF generate
+vllm_gpu_memory_utilization: 0.3
+
+wandb_run_name: search_0.5b
+eval_every: 25
+save_every: 50
+num_sample_trajectories: 8
