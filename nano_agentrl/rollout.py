@@ -1,14 +1,33 @@
 """Batched multi-turn rollouts: generate -> <search> -> retrieve -> <information> -> continue.
 
-Implements the interleaved reasoning-and-search rollout of Search-R1 Sec. 3.1-3.2,
-including the retrieved-token loss mask (Sec. 3.1, "Loss Masking for Retrieved Tokens").
-The multi-turn loop is added in milestone 2 (P10); this module already defines the
-Trajectory record that every rollout (single- or multi-turn) produces.
+Implements the interleaved reasoning-and-search rollout of Search-R1 Sec. 3.1-3.2 (Algorithm
+1), including the retrieved-token loss mask (Sec. 3.1, "Loss Masking for Retrieved Tokens").
+Loop structure follows search_r1/llm_agent/generation.py (run_llm_loop):
+
+    for turn in 1..max_turns:
+        generate for every still-active trajectory, stopping at </search> or </answer>
+        <answer>..</answer>  -> done
+        <search>q</search>   -> retrieve top-k for q (one batched call for all trajectories),
+                                append "\\n\\n<information>docs</information>\\n\\n"
+        neither              -> invalid action: append Search-R1's "My previous action is
+                                invalid..." message and let the model try again
+    one final generation for trajectories still active; a search there is not executed
+
+Every token is tagged as it is appended: policy tokens get mask 1, environment tokens
+(<information> blocks and the invalid-action message) get mask 0. That mask is what keeps
+the GRPO loss from training the model to "predict" retrieved documents.
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
+from typing import Any
+
+from nano_agentrl.prompts import INVALID_ACTION_MESSAGE, format_information
+
+ACTION_RE = re.compile(r"<(search|answer)>(.*?)</\1>", re.DOTALL)  # Search-R1's pattern
+SEARCH_STOPS = ["</search>", "</answer>"]
 
 
 @dataclass
@@ -32,3 +51,131 @@ class Trajectory:
     num_searches: int = 0
     num_invalid: int = 0
     reward: float = 0.0
+    queries: list[str] = field(default_factory=list)  # every search query, in order
+    num_turns: int = 0
+
+
+def parse_action(text: str) -> tuple[str | None, str]:
+    """('search' | 'answer' | None, content) for one generated turn.
+
+    Uses the FIRST <search>/<answer> block, as Search-R1 does. An empty search query is
+    treated as invalid.
+    """
+    match = ACTION_RE.search(text)
+    if match is None:
+        return None, ""
+    action, content = match.group(1), match.group(2).strip()
+    if action == "search" and not content:
+        return None, ""
+    return action, content
+
+
+def run_search_rollouts(
+    generator: Any,
+    tokenizer: Any,
+    retriever: Any,
+    prompt_ids: list[list[int]],
+    golds: list[list[str]],
+    n: int = 1,
+    max_turns: int = 4,
+    max_new_tokens: int = 500,
+    temperature: float = 1.0,
+    topk: int = 3,
+    max_obs_tokens: int = 500,
+    max_total_tokens: int = 4096,
+) -> list[Trajectory]:
+    """Multi-turn search rollouts for every prompt, n samples each, prompt-major.
+
+    Args:
+        generator: has generate(prompt_ids, n, max_new_tokens, temperature, stop_strings)
+            -> list of objects with .token_ids, .text, .finish_reason (nano_agentrl.generation).
+        tokenizer: HF tokenizer, used to encode environment text and decode responses.
+        retriever: has search(queries: list[str], topk) -> list[list[{"title", "text"}]].
+        prompt_ids: one token list per prompt.
+        golds: gold answers per prompt (copied onto each trajectory).
+        max_obs_tokens: an <information> observation longer than this is cut (Search-R1's
+            max_obs_length), keeping its closing tag so the format stays valid.
+        max_total_tokens: a trajectory whose prompt + response reaches this stops ("length").
+
+    Returns:
+        len(prompt_ids) * n trajectories with response_ids, response_mask, text,
+        finish_reason, num_searches, num_invalid, queries and num_turns filled in.
+        Rewards are NOT computed here (see rewards.compute_reward).
+    """
+    trajs = [
+        Trajectory(i // n, prompt_ids[i // n], [], [], "", golds=list(golds[i // n]))
+        for i in range(len(prompt_ids) * n)
+    ]
+    active = list(range(len(trajs)))
+
+    for turn in range(max_turns + 1):
+        final_turn = turn == max_turns  # one last chance to answer; searches not executed
+        if not active:
+            break
+        contexts = [trajs[i].prompt_ids + trajs[i].response_ids for i in active]
+        outputs = generator.generate(
+            contexts,
+            n=1,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            stop_strings=SEARCH_STOPS,
+        )
+
+        still_active, search_ids, search_queries = [], [], []
+        for i, out in zip(active, outputs, strict=True):
+            t = trajs[i]
+            t.response_ids += list(out.token_ids)
+            t.response_mask += [1] * len(out.token_ids)
+            t.num_turns += 1
+            action, content = parse_action(out.text)
+
+            if action == "answer":
+                t.finish_reason = "answer"
+            elif action == "search" and not final_turn:
+                t.num_searches += 1
+                t.queries.append(content)
+                search_ids.append(i)
+                search_queries.append(content)
+            elif action == "search":  # search on the final turn: budget exhausted
+                t.num_searches += 1
+                t.queries.append(content)
+                t.finish_reason = "max_turns"
+            elif out.finish_reason == "eos":  # model ended without an answer
+                t.num_invalid += 1
+                t.finish_reason = "eos"
+            else:  # malformed or missing tags
+                t.num_invalid += 1
+                if final_turn:
+                    t.finish_reason = "max_turns"
+                else:
+                    _append_env(t, tokenizer, INVALID_ACTION_MESSAGE, max_obs_tokens)
+                    still_active.append(i)
+
+        if search_queries:  # one batched retrieval call for the whole turn
+            results = retriever.search(search_queries, topk)
+            for i, docs in zip(search_ids, results, strict=True):
+                _append_env(trajs[i], tokenizer, format_information(docs), max_obs_tokens)
+                still_active.append(i)
+
+        active = []
+        for i in sorted(still_active):
+            t = trajs[i]
+            if len(t.prompt_ids) + len(t.response_ids) >= max_total_tokens:
+                t.finish_reason = "length"
+            else:
+                active.append(i)
+
+    for t in trajs:
+        t.text = tokenizer.decode(t.response_ids, skip_special_tokens=True)
+        t.finish_reason = t.finish_reason or "max_turns"
+    return trajs
+
+
+def _append_env(t: Trajectory, tokenizer: Any, text: str, max_tokens: int) -> None:
+    """Append environment text with mask 0, cut to max_tokens (keeping </information>)."""
+    ids = tokenizer(text, add_special_tokens=False)["input_ids"]
+    if len(ids) > max_tokens:
+        tail = tokenizer("</information>\n\n", add_special_tokens=False)["input_ids"]
+        ids = ids[: max(0, max_tokens - len(tail))] + tail
+    t.response_ids += ids
+    t.response_mask += [0] * len(ids)

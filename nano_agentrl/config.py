@@ -39,6 +39,8 @@ class Config:
     temperature: float = 1.0  # rollouts; eval is greedy unless measuring pass^k
     max_new_tokens: int = 512  # per generation turn
     max_turns: int = 4
+    max_obs_tokens: int = 500  # retrieved <information> longer than this is cut (Search-R1)
+    max_total_tokens: int = 4096  # prompt + whole multi-turn response
     stop_strings: list[str] = field(default_factory=lambda: ["</search>", "</answer>"])
     use_vllm: bool = False  # HF generate fallback must always work
 

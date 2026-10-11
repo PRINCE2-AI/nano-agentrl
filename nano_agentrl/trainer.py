@@ -37,7 +37,7 @@ from nano_agentrl.grpo import compute_group_advantages, grpo_loss, zero_signal_g
 from nano_agentrl.logprobs import get_token_logprobs
 from nano_agentrl.prompts import build_chat_prompt, gsm8k_prompt, search_r1_prompt
 from nano_agentrl.rewards import compute_reward, has_valid_format
-from nano_agentrl.rollout import Trajectory
+from nano_agentrl.rollout import Trajectory, run_search_rollouts
 
 CHECKPOINT_PREFIX = "step_"
 
@@ -268,7 +268,23 @@ class Trainer:
         return trajectories
 
     def _search_rollout(self, prompt_ids, examples, n, temperature) -> list[Trajectory]:
-        raise NotImplementedError("multi-turn search rollouts are wired in milestone 2 (P12)")
+        """Multi-turn generate -> search -> continue (rollout.py); env tokens get mask 0."""
+        if self.retriever is None:
+            raise RuntimeError("task 'search' needs a retriever (see nano_agentrl/retriever)")
+        return run_search_rollouts(
+            self.generator,
+            self.tokenizer,
+            self.retriever,
+            prompt_ids,
+            [ex["golds"] for ex in examples],
+            n=n,
+            max_turns=self.cfg.max_turns,
+            max_new_tokens=self.cfg.max_new_tokens,
+            temperature=temperature,
+            topk=self.cfg.topk,
+            max_obs_tokens=self.cfg.max_obs_tokens,
+            max_total_tokens=self.cfg.max_total_tokens,
+        )
 
     # ------------------------------------------------------------ policy update
 
