@@ -240,3 +240,21 @@ def test_ref_model_on_separate_device(tmp_path):
     )
     assert trainer.ref_device == torch.device("cpu")
     assert "train/kl" in trainer.train_step()
+
+
+def test_eval_only_base_and_checkpoint(tmp_path):
+    run_dir = tmp_path / "run"
+    train_script.main(["--config", CONFIG, "--dry_run", "--run_dir", str(run_dir)])
+    common = ["--config", CONFIG, "--dry_run", "--run_dir", str(run_dir), "--eval_only"]
+    train_script.main(common)  # default: latest checkpoint of the run
+    train_script.main(common + ["--ckpt", "base"])
+    latest = json.loads((run_dir / "eval_step_000002/eval.json").read_text())
+    base = json.loads((run_dir / "eval_base/eval.json").read_text())
+    assert latest["ckpt"].endswith("step_000002") and base["ckpt"] == "base"
+    for result in (latest, base):
+        assert result["num_questions"] == {"arithmetic_test": 4}
+        assert 0.0 <= result["eval/em_arithmetic"] <= 1.0
+    # evaluation must not touch the run's own metrics or checkpoints
+    steps = [m["step"] for m in read_metrics(run_dir) if "train/reward_mean" in m]
+    assert steps == [1, 2]
+    assert find_latest_checkpoint(run_dir).name == "step_000002"

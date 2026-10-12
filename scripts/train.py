@@ -11,8 +11,10 @@ Re-running with the same run_dir resumes from its latest checkpoint.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
+import time
 from pathlib import Path
 
 import yaml
@@ -22,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 from nano_agentrl.config import load_config  # noqa: E402
-from nano_agentrl.trainer import build_trainer  # noqa: E402
+from nano_agentrl.trainer import build_trainer, find_latest_checkpoint  # noqa: E402
 
 # Settings that make a run finish in seconds on a CPU with a tiny random model.
 DRY_RUN_OVERRIDES = {
@@ -71,6 +73,18 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--run_dir", default=None)
     parser.add_argument("--total_steps", type=int, default=None)
     parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE")
+    parser.add_argument(
+        "--eval_only",
+        action="store_true",
+        help="no training: evaluate --ckpt on the config's eval_splits and write a json",
+    )
+    parser.add_argument(
+        "--ckpt",
+        default=None,
+        help='with --eval_only: checkpoint dir, or "base" for the untrained model '
+        "(default: latest checkpoint in run_dir)",
+    )
+    parser.add_argument("--eval_batch_size", type=int, default=64)
     args = parser.parse_args(argv)
 
     overrides = {}
@@ -83,10 +97,42 @@ def main(argv: list[str] | None = None) -> None:
     if args.total_steps is not None:
         overrides["total_steps"] = args.total_steps
 
+    if args.eval_only:
+        evaluate_only(args, overrides)
+        return
     cfg = load_config(args.config, overrides)
     trainer = build_trainer(cfg, dry_run=args.dry_run)
     trainer.train()
     print(f"done: {cfg.run_dir}")
+
+
+def evaluate_only(args: argparse.Namespace, overrides: dict) -> dict:
+    """Greedy eval of one checkpoint (or the base model). Writes <out>/eval.json and
+    sample trajectories to <out>/samples/, where out = <run_dir>/eval_<label>."""
+    ckpt = args.ckpt
+    if ckpt is None:  # latest checkpoint of this run
+        base_cfg = load_config(args.config, overrides)
+        latest = find_latest_checkpoint(base_cfg.run_dir)
+        if latest is None:
+            raise SystemExit(f"no checkpoint in {base_cfg.run_dir}; pass --ckpt <dir> or base")
+        ckpt = str(latest)
+    label = "base" if ckpt == "base" else Path(ckpt).name
+    overrides = {**overrides, "kl_coef": 0.0, "use_wandb": False, "num_sample_trajectories": 20}
+    overrides["run_dir"] = str(Path(load_config(args.config, overrides).run_dir) / f"eval_{label}")
+    cfg = load_config(args.config, overrides)
+
+    trainer = build_trainer(cfg, dry_run=args.dry_run, policy_path=ckpt)
+    n = {split: len(examples) for split, examples in trainer.eval_data.items()}
+    print(f"[eval_only] {ckpt}: {n} questions")
+    start = time.time()
+    metrics = trainer.evaluate(chunk_size=args.eval_batch_size)
+    result = {"ckpt": ckpt, "num_questions": n, "seconds": time.time() - start, **metrics}
+    out = Path(cfg.run_dir) / "eval.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(result, indent=2), encoding="utf-8")
+    print(json.dumps(result, indent=2))
+    print(f"wrote {out}")
+    return result
 
 
 if __name__ == "__main__":

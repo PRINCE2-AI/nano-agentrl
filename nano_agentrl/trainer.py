@@ -531,14 +531,22 @@ class Trainer:
 # ---------------------------------------------------------------- building from a config
 
 
-def build_trainer(cfg: Config, dry_run: bool = False) -> Trainer:
+def build_trainer(cfg: Config, dry_run: bool = False, policy_path: str | None = None) -> Trainer:
     """Load models, tokenizer and data for `cfg`. Resumes from the latest checkpoint in
-    cfg.run_dir if there is one. dry_run uses a tiny random GPT-2 and synthetic data."""
+    cfg.run_dir if there is one. dry_run uses a tiny random GPT-2 and synthetic data.
+
+    policy_path (for evaluation): load the policy weights from this checkpoint dir instead,
+    or from cfg.model_name if it is "base", and do not restore any trainer state.
+    """
     from nano_agentrl.data import load_split, load_train_dataset
 
     set_seed(cfg.seed)
     device = resolve_device(cfg.device)
     ckpt = find_latest_checkpoint(cfg.run_dir)
+    weights = ckpt
+    if policy_path is not None:
+        ckpt = None  # evaluation only: no optimizer / data-position state to restore
+        weights = None if policy_path == "base" else Path(policy_path)
 
     if dry_run:
         from transformers import GPT2LMHeadModel
@@ -547,8 +555,8 @@ def build_trainer(cfg: Config, dry_run: bool = False) -> Trainer:
 
         tokenizer = make_char_tokenizer()
         policy = (
-            GPT2LMHeadModel.from_pretrained(ckpt)
-            if ckpt
+            GPT2LMHeadModel.from_pretrained(weights)
+            if weights
             else make_tiny_model(len(tokenizer), seed=cfg.seed)
         )
         ref_model = make_tiny_model(len(tokenizer), seed=cfg.seed) if cfg.kl_coef > 0 else None
@@ -556,7 +564,9 @@ def build_trainer(cfg: Config, dry_run: bool = False) -> Trainer:
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         tokenizer = AutoTokenizer.from_pretrained(cfg.model_name)
-        policy = AutoModelForCausalLM.from_pretrained(ckpt or cfg.model_name, dtype=torch.float32)
+        policy = AutoModelForCausalLM.from_pretrained(
+            weights or cfg.model_name, dtype=torch.float32
+        )
         ref_model = None
         if cfg.kl_coef > 0:
             ref_dtype = torch.bfloat16 if cfg.bf16 and device.type == "cuda" else torch.float32
