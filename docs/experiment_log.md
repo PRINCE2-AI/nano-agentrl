@@ -105,3 +105,21 @@ Next:
   the +12.
 - Read samples to see which output format the model drifted to.
 - Second run options: `use_format_reward: true`, `kl_coef: 0.01`. Then move to the search task.
+
+### 2026-10-12: Full GSM8K test set confirms the gain
+
+`python scripts/train.py --config configs/gsm8k_0.5b_t4.yaml --eval_only --ckpt {base | step_000200} --set eval_num_examples=1319`
+Greedy decoding, max_new_tokens 300, Kaggle T4, ~12 min per model.
+
+| Model | correct | EM | ±1 s.e. |
+|---|---|---|---|
+| Qwen2.5-0.5B-Instruct (base) | 427 / 1319 | 32.4% | 1.3% |
+| + GRPO, 200 steps (`step_000200`) | 632 / 1319 | 47.9% | 1.4% |
+| difference | +205 | **+15.5 pts** | 1.9% (unpaired) |
+
+The 100-question evals during training had overstated the base (0.36 vs 0.324). That is
+why we re-ran on the full set.
+
+Caveat: both are capped at 300 new tokens. The base model rambles, so part of the gain may
+come from finishing inside the budget (see truncation in the training-dynamics figure).
+A fairer baseline is the base model at max_new_tokens 512 (TODO, optional).
