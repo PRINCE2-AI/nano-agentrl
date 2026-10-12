@@ -33,6 +33,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
 Doc = dict[str, Any]  # {"id": str, "title": str, "text": str, "score": float}
+NEWLINE = ord("\n")
 
 
 def split_contents(contents: str) -> tuple[str, str]:
@@ -94,20 +95,53 @@ class BM25Backend:
 # ---------------------------------------------------------------- pyserini backend
 
 
+class JsonlCorpus:
+    """Random access to line i of a big jsonl file without loading it.
+
+    A one-off scan stores the byte offset of every line in <path>.offsets.npy (8 bytes per
+    line: ~170 MB for wiki-18's 21M passages). A lookup is then one seek + one readline.
+    wiki-18 doc ids are line numbers, as in Search-R1 (corpus[int(docid)]).
+    """
+
+    def __init__(self, path: str | Path) -> None:
+        self.path = Path(path)
+        offsets_path = self.path.with_name(self.path.name + ".offsets.npy")
+        if not offsets_path.exists():
+            np.save(offsets_path, build_line_offsets(self.path))
+        self.offsets = np.load(offsets_path, mmap_mode="r")
+        self.file = open(self.path, "rb")  # noqa: SIM115 (kept open for the server's life)
+
+    def __len__(self) -> int:
+        return len(self.offsets)
+
+    def __getitem__(self, i: int) -> dict:
+        self.file.seek(int(self.offsets[i]))
+        return json.loads(self.file.readline())
+
+
+def build_line_offsets(path: str | Path, chunk_bytes: int = 1 << 26) -> np.ndarray:
+    """Byte offset where each line starts. (num_lines,) int64. Scans in 64 MB chunks."""
+    starts = [np.zeros(1, dtype=np.int64)]
+    pos = 0
+    with open(path, "rb") as f:
+        while chunk := f.read(chunk_bytes):
+            newlines = np.flatnonzero(np.frombuffer(chunk, dtype=np.uint8) == NEWLINE)
+            starts.append(newlines.astype(np.int64) + pos + 1)
+            pos += len(chunk)
+    offsets = np.concatenate(starts)
+    return offsets[offsets < pos]  # drop the "line" after a trailing newline
+
+
 class PyseriniBackend:
-    """Lucene BM25 via Pyserini. Docs are read from the index if it stores them, else from
-    the corpus jsonl (loaded with `datasets`, memory-mapped, looked up by integer id)."""
+    """Lucene BM25 via Pyserini. Docs come from the corpus jsonl (JsonlCorpus) when given,
+    else from the index's stored raw documents (wiki-18's BM25 index stores only ids)."""
 
     def __init__(self, index_dir: str, corpus_path: str | None, threads: int = 16) -> None:
         from pyserini.search.lucene import LuceneSearcher
 
         self.searcher = LuceneSearcher(index_dir)
         self.threads = threads
-        self.corpus = None
-        if corpus_path:
-            from datasets import load_dataset
-
-            self.corpus = load_dataset("json", data_files=corpus_path, split="train")
+        self.corpus = JsonlCorpus(corpus_path) if corpus_path else None
 
     def __len__(self) -> int:
         return self.searcher.num_docs
@@ -115,8 +149,10 @@ class PyseriniBackend:
     def _doc(self, docid: str) -> tuple[str, str]:
         if self.corpus is not None:
             return split_contents(self.corpus[int(docid)]["contents"])
-        raw = json.loads(self.searcher.doc(docid).raw())
-        return split_contents(raw["contents"])
+        raw = self.searcher.doc(docid).raw()
+        if raw is None:
+            raise RuntimeError("this index stores no document text: pass --corpus <jsonl>")
+        return split_contents(json.loads(raw)["contents"])
 
     def search(self, queries: list[str], topk: int) -> list[list[Doc]]:
         qids = [str(i) for i in range(len(queries))]

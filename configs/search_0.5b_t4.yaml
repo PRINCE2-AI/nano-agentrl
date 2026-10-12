@@ -1,0 +1,50 @@
+# Search-R1 GRPO with Qwen2.5-0.5B-Instruct on a free Kaggle "GPU T4 x2" notebook.
+# Retriever: scripts/kaggle/setup_retriever.sh + scripts/kaggle/start_retriever.py (BM25, wiki-18).
+#
+# Sized from the GSM8K T4 run (83 s/step at 64 completions of <=300 tokens). Search adds
+# turns and retrieved text, so expect ~3-4 min/step: 150 steps ~ 8-10 h, inside one 12 h
+# Kaggle session. Search-R1's own GRPO script used max_turns 2, which we copy here.
+task: search
+model_name: Qwen/Qwen2.5-0.5B-Instruct
+seed: 42
+run_dir: /kaggle/working/search_0.5b
+
+train_dataset: PeterJinGo/nq_hotpotqa_train
+eval_splits: [nq_dev_500, hotpotqa_dev_500]
+eval_num_examples: 100       # 100 of each 500-question dev subset during training (~±5%);
+                             # re-evaluate the final checkpoint on all 500 afterwards
+max_prompt_len: 1024
+
+group_size: 8
+temperature: 1.0
+max_new_tokens: 300          # per turn
+max_turns: 2                 # Search-R1 train_grpo.sh: max_turns=2
+max_obs_tokens: 400          # 3 docs of wiki-18 are ~350 tokens
+max_total_tokens: 2048       # prompt + 3 generations + 2 <information> blocks
+topk: 3
+retriever_url: http://127.0.0.1:8000
+
+clip_eps: 0.2
+kl_coef: 0.001               # Search-R1 value (low_var_kl = our k3)
+loss_agg: token_mean
+normalize_std: true
+use_format_reward: false     # EM needs an <answer> block, so the format is rewarded implicitly
+
+lr: 1.0e-6
+warmup_steps: 0
+prompts_per_step: 8          # 64 trajectories per step
+micro_batch_size: 1          # sequences up to 2048 tokens x 152k vocab: one at a time
+total_steps: 150
+
+# --- memory / hardware ---
+ref_device: cuda:1
+bf16: false
+gradient_checkpointing: true
+use_vllm: false
+
+use_wandb: true
+wandb_run_name: search_0.5b_t4
+eval_every: 25
+save_every: 25
+keep_last_checkpoints: 2
+num_sample_trajectories: 8

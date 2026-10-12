@@ -82,3 +82,19 @@ def test_wiki18_corpus_format(tmp_path):
     assert docs[0] == {"id": "0", "title": "Paris", "text": "Paris is in France."}
     assert split_contents("Title only") == ("Title only", "")
     assert len(load_corpus_jsonl(path, limit=1)) == 1
+
+
+def test_jsonl_corpus_random_access(tmp_path):
+    from nano_agentrl.retriever.server import JsonlCorpus, build_line_offsets
+
+    path = tmp_path / "c.jsonl"
+    rows = [{"id": str(i), "contents": f'"T{i}"\nText ünïcode {i}'} for i in range(1000)]
+    path.write_text(
+        "\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8"
+    )
+    assert len(build_line_offsets(path, chunk_bytes=97)) == 1000  # chunk edges must not matter
+    corpus = JsonlCorpus(path)
+    assert len(corpus) == 1000
+    assert corpus[0] == rows[0] and corpus[999] == rows[999] and corpus[123] == rows[123]
+    assert (tmp_path / "c.jsonl.offsets.npy").exists()
+    assert JsonlCorpus(path)[500] == rows[500]  # reuses the saved offsets
