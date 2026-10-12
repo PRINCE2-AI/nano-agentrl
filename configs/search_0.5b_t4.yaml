@@ -11,7 +11,7 @@ run_dir: /kaggle/working/search_0.5b
 
 train_dataset: PeterJinGo/nq_hotpotqa_train
 eval_splits: [nq_dev_500, hotpotqa_dev_500]
-eval_num_examples: 100       # 100 of each 500-question dev subset during training (~±5%);
+eval_num_examples: 50        # 50 of each 500-question dev subset during training (~±7%);
                              # re-evaluate the final checkpoint on all 500 afterwards
 max_prompt_len: 1024
 
@@ -28,13 +28,16 @@ clip_eps: 0.2
 kl_coef: 0.001               # Search-R1 value (low_var_kl = our k3)
 loss_agg: token_mean
 normalize_std: true
-use_format_reward: false     # EM needs an <answer> block, so the format is rewarded implicitly
+use_format_reward: true      # Kaggle peek, 20 NQ questions, base model: 0 correct, 4 with an
+format_reward_weight: 0.1    # <answer>, 19 stopped without any tag -> all-zero groups, no
+                             # gradient. 0.1 for a well-formed answer gives a first signal;
+                             # a correct answer still scores 1.0.
 
 lr: 1.0e-6
 warmup_steps: 0
 prompts_per_step: 8          # 64 trajectories per step
 micro_batch_size: 1          # sequences up to 2048 tokens x 152k vocab: one at a time
-total_steps: 150
+total_steps: 100            # ~5 min/step with retries after invalid actions -> ~9 h
 
 # --- memory / hardware ---
 ref_device: cuda:1

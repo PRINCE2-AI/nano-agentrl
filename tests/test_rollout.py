@@ -141,9 +141,42 @@ def test_malformed_tags_are_invalid_and_retried(char_tokenizer, retriever):
     assert len(gen.calls) == 2
 
 
-def test_eos_without_answer_ends_trajectory(char_tokenizer, retriever):
-    (t,), gen = run(char_tokenizer, lambda *a: "I give up", retriever, finish_reason="eos")
-    assert t.finish_reason == "eos" and t.num_invalid == 1 and gen.calls == [1]
+class EosThenAnswer(ScriptedGenerator):
+    """Turn 1: chatter then the EOS token. After the invalid-action message: a proper answer."""
+
+    def generate(self, prompt_ids, n=1, max_new_tokens=500, temperature=1.0, stop_strings=None):
+        self.calls.append(len(prompt_ids))
+        outs = []
+        for i, ids in enumerate(prompt_ids):
+            text = self.tok.decode(ids)
+            if INVALID_ACTION_MESSAGE in text:
+                reply = encode(self.tok, "<answer>Paris</answer>")
+                outs.append(GenerationOutput(i, reply, self.tok.decode(reply), "stop"))
+            else:
+                reply = encode(self.tok, "I think it is Paris") + [self.tok.eos_token_id]
+                outs.append(GenerationOutput(i, reply, "I think it is Paris", "eos"))
+        return outs
+
+
+def test_eos_without_action_gets_invalid_message_and_retry(char_tokenizer, retriever):
+    """Search-R1 behaviour: stopping without <search>/<answer> is an invalid action, not the
+    end of the episode. The EOS is dropped and the environment explains the protocol."""
+    gen = EosThenAnswer(char_tokenizer, script=None)
+    (t,) = run_search_rollouts(
+        gen, char_tokenizer, retriever, [encode(char_tokenizer, "Q|")], [["Paris"]]
+    )
+    assert gen.calls == [1, 1]
+    assert t.num_invalid == 1 and t.finish_reason == "answer"
+    assert char_tokenizer.eos_token_id not in t.response_ids
+    assert INVALID_ACTION_MESSAGE in masked_text(char_tokenizer, t, 0)
+    assert masked_text(char_tokenizer, t, 1) == "I think it is Paris<answer>Paris</answer>"
+
+
+def test_eos_on_every_turn_stops_at_the_budget(char_tokenizer, retriever):
+    (t,), gen = run(
+        char_tokenizer, lambda *a: "I give up", retriever, finish_reason="eos", max_turns=2
+    )
+    assert gen.calls == [1, 1, 1] and t.num_invalid == 3 and t.finish_reason == "eos"
 
 
 def test_batch_with_mixed_finishing_turns(char_tokenizer, retriever):

@@ -9,7 +9,8 @@ Loop structure follows search_r1/llm_agent/generation.py (run_llm_loop):
         <answer>..</answer>  -> done
         <search>q</search>   -> retrieve top-k for q (one batched call for all trajectories),
                                 append "\\n\\n<information>docs</information>\\n\\n"
-        neither              -> invalid action: append Search-R1's "My previous action is
+        neither              -> invalid action (malformed tags, or EOS with no action): drop
+                                the EOS, append Search-R1's "My previous action is
                                 invalid..." message and let the model try again
     one final generation for trajectories still active; a search there is not executed
 
@@ -141,14 +142,17 @@ def run_search_rollouts(
                 t.num_searches += 1
                 t.queries.append(content)
                 t.finish_reason = "max_turns"
-            elif out.finish_reason == "eos":  # model ended without an answer
-                t.num_invalid += 1
-                t.finish_reason = "eos"
-            else:  # malformed or missing tags
+            else:  # no valid action: malformed / missing tags, or stopped (EOS) without one
                 t.num_invalid += 1
                 if final_turn:
-                    t.finish_reason = "max_turns"
+                    t.finish_reason = "eos" if out.finish_reason == "eos" else "max_turns"
                 else:
+                    # Like Search-R1 (which decodes with skip_special_tokens): drop the EOS
+                    # so the episode can go on, then let the environment explain the protocol.
+                    eos_id = tokenizer.eos_token_id
+                    if out.finish_reason == "eos" and t.response_ids[-1:] == [eos_id]:
+                        t.response_ids.pop()
+                        t.response_mask.pop()
                     _append_env(t, tokenizer, INVALID_ACTION_MESSAGE, max_obs_tokens)
                     still_active.append(i)
 
