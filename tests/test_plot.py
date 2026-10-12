@@ -76,6 +76,7 @@ def test_all_figures_written(tmp_path):
         "fig3_acc_vs_reliability",
         "fig4_searches",
         "fig5_failure_taxonomy",
+        "fig6_training_dynamics",
     }
     assert all(p.stat().st_size > 1000 for p in out)
 

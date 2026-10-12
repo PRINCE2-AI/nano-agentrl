@@ -263,7 +263,7 @@ def fig_searches(runs: dict[str, list[dict]], out_dir: Path, window: int) -> lis
     drawn = 0
     for i, (label, rows) in enumerate(runs.items()):
         x, y = series(rows, "train/num_searches")
-        if not len(x):
+        if not len(x) or not y.any():  # e.g. GSM8K: no search tool, nothing to show
             continue
         color = SERIES[i % len(SERIES)]
         ax.plot(x, y, color=color, lw=0.8, alpha=0.25)
@@ -316,6 +316,47 @@ def fig_failure_taxonomy(rel: list[dict], out_dir: Path, split: str) -> list[Pat
     return save(fig, out_dir, "fig5_failure_taxonomy")
 
 
+DYNAMICS = [
+    ("train/reward_mean", "train reward"),
+    ("train/invalid_format_rate", "invalid format rate"),
+    ("train/truncated_frac", "truncated responses"),
+    ("train/entropy", "entropy estimate (nats)"),
+]
+
+
+def fig_training_dynamics(
+    runs: dict[str, list[dict]], out_dir: Path, window: int
+) -> list[Path] | None:
+    """Small multiples, one metric per panel, one y-axis each (never a dual axis)."""
+    if not any(series(rows, DYNAMICS[0][0])[0].size for rows in runs.values()):
+        return None
+    fig, axes = plt.subplots(2, 2, figsize=(7.2, 4.6), sharex=True)
+    for ax, (key, title) in zip(axes.flat, DYNAMICS, strict=True):
+        for i, (label, rows) in enumerate(runs.items()):
+            x, y = series(rows, key)
+            if not len(x):
+                continue
+            color = SERIES[i % len(SERIES)]
+            ax.plot(x, y, color=color, lw=0.8, alpha=0.25)
+            ax.plot(x, smooth(y, window), color=color, label=label)
+        ax.set_title(title, fontsize=9)
+        ax.set_ylim(bottom=0)
+        if key != "train/entropy":
+            percent_axis(ax)
+    for ax in axes[1]:
+        ax.set_xlabel("training step")
+    if len(runs) > 1:
+        axes[0, 0].legend(loc="lower right")
+    fig.suptitle(
+        f"Training dynamics ({window}-step mean over raw values)",
+        x=0.01,
+        ha="left",
+        fontsize=10,
+        fontweight="bold",
+    )
+    return save(fig, out_dir, "fig6_training_dynamics")
+
+
 # ---------------------------------------------------------------- CLI
 
 
@@ -333,7 +374,11 @@ def main(argv: list[str] | None = None) -> list[Path]:
     runs = {lab: load_metrics(p) for lab, p in zip(labels, args.metrics, strict=True)}
     out_dir = Path(args.out_dir)
     written: list[Path] = []
-    for result in (fig_em_vs_step(runs, out_dir), fig_searches(runs, out_dir, args.smooth)):
+    for result in (
+        fig_em_vs_step(runs, out_dir),
+        fig_searches(runs, out_dir, args.smooth),
+        fig_training_dynamics(runs, out_dir, args.smooth),
+    ):
         written += result or []
     if args.reliability:
         rel = load_reliability(args.reliability)

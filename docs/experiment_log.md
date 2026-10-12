@@ -61,3 +61,47 @@ Notable results and decisions, newest last.
 - P13: the failure judge uses claude-opus-5-5 at effort low, with JSON-schema output and
   server-side refusal fallback. Judgements are cached on disk.
 - Next: the first real run (`search_0.5b`) on a GPU box.
+
+## 2026-10-12: First real run, GSM8K GRPO, Qwen2.5-0.5B-Instruct, Kaggle 2×T4
+
+Config `configs/gsm8k_0.5b_t4.yaml`: 200 steps, 8 prompts × G=8, fp32 + gradient
+checkpointing, reference model on cuda:1, HF generate. 83 s/step, 4.8 h total, 10.6 GB on GPU 0.
+Metrics: `runs/gsm8k_0.5b_t4/metrics.jsonl` (not in git). Figures: `docs/figures/gsm8k_0.5b_t4/`.
+
+**Held-out EM (greedy, 100 GSM8K test questions, ±5% standard error):**
+0.36 at step 0, then 0.47, 0.45, 0.49, 0.51, 0.46, 0.48, 0.52, 0.47 at steps 25–200.
+That is +12 points, and almost all of it arrives by step 25. After that it is flat within noise.
+
+| steps | train reward | invalid format | truncated | entropy | len | KL |
+|---|---|---|---|---|---|---|
+| 1–25 | 0.26 | 0.93 | 0.31 | 1.04 | 223 | 0.06 |
+| 26–50 | 0.40 | 0.93 | 0.03 | 0.41 | 141 | 0.22 |
+| 51–75 | 0.49 | 0.34 | 0.15 | 0.28 | 206 | 0.20 |
+| 76–100 | 0.51 | 0.33 | 0.19 | 0.21 | 218 | 0.36 |
+| 101–125 | 0.54 | 0.23 | 0.10 | 0.23 | 192 | 0.42 |
+| 126–150 | 0.55 | 0.27 | 0.07 | 0.25 | 190 | 0.31 |
+| 151–175 | 0.49 | 0.83 | 0.04 | 0.28 | 159 | 0.37 |
+| 176–200 | 0.60 | 0.84 | 0.05 | 0.24 | 163 | 0.27 |
+
+Findings:
+1. **The early gain is mostly "stop rambling".** Truncation at the 300-token cap peaks at
+   50–65% around steps 5–10 and falls to ~3% by step 30. Over the same window held-out EM
+   jumps 0.36 → 0.47. Truncated answers have no final number, so they score 0.
+2. **The gain is NOT format learning (my earlier guess was wrong).** The invalid-format rate
+   is ~93% for steps 1–50, drops to 20–35% for steps 51–150, then drifts back to ~85% after
+   step 150, while reward keeps rising. The cause: format reward is off, and GSM8K scoring
+   falls back to "last number in the text", so the `<answer>` tag is never rewarded and the
+   format drifts freely. For the search task this cannot happen, because EM requires an
+   `<answer>` block. For GSM8K, `use_format_reward: true` or strict extraction would pin it.
+3. **Entropy collapses fast**: 1.5 → 0.25 nats by step 60. kl_coef 0.001 barely constrains
+   the policy: median KL is 0.26, with spikes of 2.1 (step 102) and 2.0 (step 174). Train
+   reward still climbs 0.49 → 0.60 after step 50 while held-out EM is flat. That is probably
+   noise plus overconfidence, not new skill.
+4. **27–40% of groups carry zero signal** (all 8 samples equally right or wrong). That
+   is a third of each batch wasted, and an argument for larger G or harder-prompt filtering.
+
+Next:
+- Re-evaluate step 0 and step 200 on all 1,319 test questions (±1.4%) before claiming
+  the +12.
+- Read samples to see which output format the model drifted to.
+- Second run options: `use_format_reward: true`, `kl_coef: 0.01`. Then move to the search task.
