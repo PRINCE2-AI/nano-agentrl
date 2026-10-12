@@ -116,3 +116,13 @@ def test_format_reward_only_when_enabled_and_wrong():
 def test_unknown_task_raises():
     with pytest.raises(ValueError):
         compute_reward("x", "y", "chess")
+
+
+def test_format_reward_answer_tag_mode():
+    sloppy = "<think>unclosed think <answer>Paris</answer>"  # fails the strict check
+    assert compute_reward(sloppy, ["London"], "search", True, 0.1, "strict") == 0.0
+    assert compute_reward(sloppy, ["London"], "search", True, 0.1, "answer_tag") == 0.1
+    assert compute_reward("no tags at all", ["London"], "search", True, 0.1, "answer_tag") == 0.0
+    assert compute_reward(sloppy, ["Paris"], "search", True, 0.1, "answer_tag") == 1.0
+    with pytest.raises(ValueError):
+        compute_reward(sloppy, ["London"], "search", True, 0.1, "lenient")

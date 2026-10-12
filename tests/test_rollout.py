@@ -217,3 +217,17 @@ def test_total_length_limit(char_tokenizer, retriever):
         char_tokenizer, lambda *a: "<search>paris</search>", retriever, max_total_tokens=100
     )
     assert t.finish_reason == "length" and gen.calls == [1]
+
+
+def test_environment_text_cannot_earn_reward(char_tokenizer, retriever):
+    """The invalid-action message contains '<answer> and </answer>'. A trajectory that never
+    answers must still score 0, also under the lenient answer_tag format reward."""
+    from nano_agentrl.rewards import compute_reward, extract_answer
+
+    (t,), _ = run(
+        char_tokenizer, lambda *a: "I give up", retriever, finish_reason="eos", max_turns=2
+    )
+    assert "<answer>" in t.text  # the environment's message
+    assert "<answer>" not in t.policy_text and t.scored_text() == t.policy_text
+    assert extract_answer(t.scored_text()) is None
+    assert compute_reward(t.scored_text(), ["and"], "search", True, 0.1, "answer_tag") == 0.0

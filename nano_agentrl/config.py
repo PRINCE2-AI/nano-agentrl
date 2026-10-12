@@ -55,6 +55,7 @@ class Config:
     # --- reward ---
     use_format_reward: bool = False  # outcome-only EM by default
     format_reward_weight: float = 0.1
+    format_reward_mode: str = "strict"  # "strict" | "answer_tag" (see rewards.compute_reward)
 
     # --- GRPO ---
     clip_eps: float = 0.2

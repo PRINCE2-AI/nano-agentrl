@@ -123,13 +123,13 @@ def to_records(
                 "sample": j % n_samples,
                 "question": ex["question"],
                 "golds": t.golds,
-                "prediction": extract_answer(t.text),
-                "correct": compute_reward(t.text, t.golds, "search") == 1.0,
+                "prediction": extract_answer(t.scored_text()),
+                "correct": compute_reward(t.scored_text(), t.golds, "search") == 1.0,
                 "num_searches": t.num_searches,
                 "num_invalid": t.num_invalid,
                 "num_turns": t.num_turns,
                 "finish_reason": t.finish_reason,
-                "valid_format": has_valid_format(t.text, "search"),
+                "valid_format": has_valid_format(t.scored_text(), "search"),
                 "text": t.text,
             }
         )

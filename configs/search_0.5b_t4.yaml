@@ -32,12 +32,15 @@ use_format_reward: true      # Kaggle peek, 20 NQ questions, base model: 0 corre
 format_reward_weight: 0.1    # <answer>, 19 stopped without any tag -> all-zero groups, no
                              # gradient. 0.1 for a well-formed answer gives a first signal;
                              # a correct answer still scores 1.0.
+format_reward_mode: answer_tag  # trial 2 with "strict": 97-100% of rollouts failed the strict
+                             # check (unclosed <think> etc.), reward 0.003. Any <answer> block
+                             # earns the 0.1 instead; train/invalid_format_rate stays strict.
 
 lr: 1.0e-6
 warmup_steps: 0
 prompts_per_step: 8          # 64 trajectories per step
 micro_batch_size: 1          # sequences up to 2048 tokens x 152k vocab: one at a time
-total_steps: 100            # ~5 min/step with retries after invalid actions -> ~9 h
+total_steps: 90             # trial: ~5.4 min/step -> ~8 h + evals, inside 12 h
 
 # --- memory / hardware ---
 ref_device: cuda:1

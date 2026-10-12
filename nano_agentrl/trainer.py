@@ -262,11 +262,12 @@ class Trainer:
             ]
         for t in trajectories:
             t.reward = compute_reward(
-                t.text,
+                t.scored_text(),
                 t.golds,
                 self.cfg.task,
                 self.cfg.use_format_reward,
                 self.cfg.format_reward_weight,
+                self.cfg.format_reward_mode,
             )
         return trajectories
 
@@ -406,7 +407,7 @@ class Trainer:
             "train/response_len": float(np.mean([len(t.response_ids) for t in trajectories])),
             "train/num_searches": float(np.mean([t.num_searches for t in trajectories])),
             "train/invalid_format_rate": float(
-                np.mean([not has_valid_format(t.text, cfg.task) for t in trajectories])
+                np.mean([not has_valid_format(t.scored_text(), cfg.task) for t in trajectories])
             ),
             "train/truncated_frac": float(
                 np.mean([t.finish_reason in ("length", "max_turns") for t in trajectories])
@@ -490,7 +491,9 @@ class Trainer:
     def load_trainer_state(self, ckpt: Path) -> None:
         """Restore optimizer, schedule, data position and RNGs. Policy weights are loaded
         from the checkpoint before the Trainer is built (see build_trainer)."""
-        state = torch.load(ckpt / "trainer_state.pt", map_location=self.device, weights_only=False)
+        # CPU first: torch.set_rng_state needs a CPU ByteTensor; optimizer.load_state_dict
+        # then moves each state tensor to its parameter's device.
+        state = torch.load(ckpt / "trainer_state.pt", map_location="cpu", weights_only=False)
         self.step, self.epoch, self.cursor = state["step"], state["epoch"], state["cursor"]
         self.order = self._epoch_order(self.epoch)
         self.optimizer.load_state_dict(state["optimizer"])

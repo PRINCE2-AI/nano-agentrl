@@ -99,8 +99,15 @@ def compute_reward(
     task: str,
     use_format_reward: bool = False,
     format_reward_weight: float = 0.1,
+    format_reward_mode: str = "strict",
 ) -> float:
-    """Outcome reward for one response. task: "gsm8k" (golds = '72') or "search" (EM)."""
+    """Outcome reward for one response. task: "gsm8k" (golds = '72') or "search" (EM).
+
+    format_reward_mode decides which wrong answers earn format_reward_weight:
+        "strict"      has_valid_format (one <answer>, balanced tags, search ends in </answer>)
+        "answer_tag"  any <answer>...</answer> block, a softer target for bootstrapping a small
+                      model that rarely closes its tags
+    """
     if task == "gsm8k":
         gold = golds if isinstance(golds, str) else golds[0]
         correct = gsm8k_correct(text, gold)
@@ -110,6 +117,14 @@ def compute_reward(
         raise ValueError(f"unknown task {task!r}")
     if correct:
         return 1.0
-    if use_format_reward and has_valid_format(text, task):
-        return format_reward_weight
-    return 0.0
+    if not use_format_reward:
+        return 0.0
+    if format_reward_mode == "strict":
+        well_formed = has_valid_format(text, task)
+    elif format_reward_mode == "answer_tag":
+        well_formed = extract_answer(text) is not None
+    else:
+        raise ValueError(
+            f"format_reward_mode must be 'strict' or 'answer_tag', got {format_reward_mode!r}"
+        )
+    return format_reward_weight if well_formed else 0.0

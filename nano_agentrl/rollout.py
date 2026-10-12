@@ -54,6 +54,13 @@ class Trajectory:
     reward: float = 0.0
     queries: list[str] = field(default_factory=list)  # every search query, in order
     num_turns: int = 0
+    # Decoded policy tokens only (mask 1). Rewards and format checks read this, never `text`:
+    # environment text (retrieved docs, the invalid-action message, which itself contains
+    # "<answer> and </answer>") must not be able to earn reward.
+    policy_text: str = ""
+
+    def scored_text(self) -> str:
+        return self.policy_text or self.text
 
 
 def parse_action(text: str) -> tuple[str | None, str]:
@@ -172,8 +179,15 @@ def run_search_rollouts(
 
     for t in trajs:
         t.text = tokenizer.decode(t.response_ids, skip_special_tokens=True)
+        t.policy_text = policy_only_text(t, tokenizer)
         t.finish_reason = t.finish_reason or "max_turns"
     return trajs
+
+
+def policy_only_text(t: Trajectory, tokenizer: Any) -> str:
+    """Decode only the tokens the policy generated (response_mask == 1)."""
+    ids = [i for i, m in zip(t.response_ids, t.response_mask, strict=True) if m]
+    return tokenizer.decode(ids, skip_special_tokens=True)
 
 
 def _append_env(t: Trajectory, tokenizer: Any, text: str, max_tokens: int) -> None:

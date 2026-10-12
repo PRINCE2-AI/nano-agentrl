@@ -123,3 +123,24 @@ why we re-ran on the full set.
 Caveat: both are capped at 300 new tokens. The base model rambles, so part of the gain may
 come from finishing inside the budget (see truncation in the training-dynamics figure).
 A fairer baseline is the base model at max_new_tokens 512 (TODO, optional).
+
+## 2026-10-12: Search task on Kaggle T4: setup works, the 0.5B base gives no signal
+
+- Retriever setup on Kaggle runs first try: Java 21, Pyserini 2.4 (`--no-deps`), and the
+  wiki-18 index and corpus in /tmp (1 TB free). Download + unzip + offsets take ~5 min.
+  The corpus has 21,015,325 lines but the index has 21,015,324 docs, so lookups now verify
+  `id`. ~400 ms per single query.
+- Base Qwen2.5-0.5B-Instruct, 20 NQ questions, greedy: 0 correct, 4 with `<answer>`,
+  2 searched, 19 stopped with EOS and no tag. Trial 1 (no format reward): reward 0.000 for
+  3 steps, so every group carried zero signal.
+- Bug: our rollout ended an episode on EOS without an action. Search-R1 treats that as an
+  invalid action (message + retry). Fixed.
+- Trial 2 (strict format reward 0.1): reward 0.002–0.003, invalid format 97–100%,
+  zero-signal groups 0.75–0.88, ~5.4 min/step, GPU0 13.6 GB.
+- Next: format_reward_mode `answer_tag` (any `<answer>` block earns the 0.1).
+- Bug caught before it ran: Search-R1's invalid-action message itself contains
+  "<answer> and </answer>". Scoring the full text would have paid the format reward for
+  *receiving* the message, i.e. reward hacking. Rewards, format checks and eval predictions
+  now read policy tokens only (`Trajectory.policy_text`).
+- Bug: resume crashed on GPU (`torch.set_rng_state` needs a CPU tensor). The checkpoint
+  state now loads to CPU.
