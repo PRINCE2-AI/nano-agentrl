@@ -28,6 +28,7 @@ vllm = ["vllm"]
 dense = ["faiss-cpu"]
 retriever = ["pyserini"]
 judge = ["anthropic>=1.0"]
+bnb = ["bitsandbytes>=0.45"]
 trl = ["trl"]
 
 [tool.setuptools.packages.find]

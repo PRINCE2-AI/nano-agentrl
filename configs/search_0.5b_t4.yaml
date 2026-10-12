@@ -46,6 +46,9 @@ total_steps: 90             # trial: ~5.4 min/step -> ~8 h + evals, inside 12 h
 ref_device: cuda:1
 bf16: false
 gradient_checkpointing: true
+use_8bit_adam: true          # trial 3 peaked at 15.08 GB of the T4's ~15.6 GB. bitsandbytes
+                             # AdamW8bit stores Adam states in 8 bits: ~4 GB -> ~1 GB.
+                             # Needs `pip install bitsandbytes` (falls back to AdamW if missing).
 use_vllm: false
 
 use_wandb: true
