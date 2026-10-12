@@ -132,6 +132,19 @@ def build_line_offsets(path: str | Path, chunk_bytes: int = 1 << 26) -> np.ndarr
     return offsets[offsets < pos]  # drop the "line" after a trailing newline
 
 
+def lookup_by_id(corpus: JsonlCorpus, docid: str, window: int = 3) -> dict:
+    """Row whose "id" equals docid. wiki-18 ids are line numbers, but the corpus has one more
+    line than the index has docs, so verify the id and search a few neighbouring lines rather
+    than silently returning the passage next to the right one."""
+    i = int(docid)
+    for j in [i] + [i + d for k in range(1, window + 1) for d in (-k, k)]:
+        if 0 <= j < len(corpus):
+            row = corpus[j]
+            if str(row.get("id", j)) == docid:
+                return row
+    raise KeyError(f"doc id {docid} not found near line {i} of {corpus.path}")
+
+
 class PyseriniBackend:
     """Lucene BM25 via Pyserini. Docs come from the corpus jsonl (JsonlCorpus) when given,
     else from the index's stored raw documents (wiki-18's BM25 index stores only ids)."""
@@ -148,7 +161,7 @@ class PyseriniBackend:
 
     def _doc(self, docid: str) -> tuple[str, str]:
         if self.corpus is not None:
-            return split_contents(self.corpus[int(docid)]["contents"])
+            return split_contents(lookup_by_id(self.corpus, docid)["contents"])
         raw = self.searcher.doc(docid).raw()
         if raw is None:
             raise RuntimeError("this index stores no document text: pass --corpus <jsonl>")

@@ -98,3 +98,18 @@ def test_jsonl_corpus_random_access(tmp_path):
     assert corpus[0] == rows[0] and corpus[999] == rows[999] and corpus[123] == rows[123]
     assert (tmp_path / "c.jsonl.offsets.npy").exists()
     assert JsonlCorpus(path)[500] == rows[500]  # reuses the saved offsets
+
+
+def test_lookup_by_id_tolerates_shifted_lines(tmp_path):
+    from nano_agentrl.retriever.server import JsonlCorpus, lookup_by_id
+
+    path = tmp_path / "c.jsonl"
+    rows = [{"id": "x", "contents": "junk\nfirst line"}] + [
+        {"id": str(i), "contents": f"T{i}\nbody {i}"} for i in range(50)
+    ]  # one extra line at the top: every id sits one line below its number
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    corpus = JsonlCorpus(path)
+    assert lookup_by_id(corpus, "7")["contents"] == "T7\nbody 7"
+    assert lookup_by_id(corpus, "49")["contents"] == "T49\nbody 49"
+    with pytest.raises(KeyError):
+        lookup_by_id(corpus, "999")
