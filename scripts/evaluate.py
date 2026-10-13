@@ -49,7 +49,9 @@ def load_model(ckpt: str, device: str, use_vllm: bool):
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
     tokenizer = AutoTokenizer.from_pretrained(ckpt)
-    dtype = torch.bfloat16 if device == "cuda" else torch.float32
+    # bf16 only where the GPU supports it (T4 / sm_75 does not); fp32 otherwise.
+    bf16_ok = device == "cuda" and torch.cuda.is_bf16_supported(including_emulation=False)
+    dtype = torch.bfloat16 if bf16_ok else torch.float32
     if use_vllm:
         return Generator(None, tokenizer, backend="vllm", model_name=ckpt), tokenizer
     model = AutoModelForCausalLM.from_pretrained(ckpt, dtype=dtype).to(device).eval()
