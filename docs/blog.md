@@ -1,7 +1,6 @@
 # What broke and what I learned re-implementing Search-R1
 
-*Draft. Sections marked TODO wait for the GPU runs. Everything else happened while building
-the code.*
+*Draft. Every number here comes from a real run on a free Kaggle 2× T4 notebook.*
 
 I wanted to understand how a language model learns to *use a tool* through reinforcement
 learning. So I re-implemented [Search-R1](https://arxiv.org/abs/2503.09516) from scratch.
@@ -28,7 +27,7 @@ curve.
 model didn't write them. If you train on them, you teach the model to "predict Wikipedia".
 Every appended token is tagged 1 (policy) or 0 (environment) at the moment it is appended,
 and the test checks that the mask is exactly 0 over every `<information>` span. The
-`nomask` ablation measures how much this matters. TODO: result.
+`nomask` ablation measures how much this matters (not run yet).
 
 ## 2. Precision: bf16 weights eat your updates
 
@@ -62,10 +61,26 @@ model never updates, so it lives in bf16.
 - On Windows, Python's `write_text` turned a bash script's line endings into CRLF, and bash
   read `32\r` as a number. The fix was a `.gitattributes` rule: `*.sh text eol=lf`.
 
-## 5. Accuracy is not reliability
+## 5. What actually happened in training
 
-TODO (after the sweep): pass@1 vs pass^8 over training, the gap between them, and which
-failure types RL removes first. See [reliability.md](reliability.md).
+**GSM8K (0.5B, 200 steps, 4.8 h): 32.4% → 47.9%** on the full test set. Most of the gain
+came in the first 25 steps, and most of *that* was the model learning to finish inside the
+token budget: truncated answers fell from ~60% to ~3%. With no reward for the `<answer>`
+tag, the tag drifted in and out of use the whole run. RL optimizes exactly what you pay
+for, and nothing else.
+
+**Search (0.5B, 90 steps, 2.9 h).** The base model never followed the protocol: in 19 of
+20 cases it chatted and stopped. A 0.1 format reward gave GRPO its first gradient, and the
+model promptly found the cheapest way to collect it: `<answer>guess</answer>` in 20 tokens,
+no search. It sat in that local optimum for ~45 steps. Then, over five steps, searches per
+question jumped from 0.03 to 1.0 and exact match followed: **13.0% NQ, 19.6% HotpotQA**,
+up from ~0.
+
+**The humbling part.** On a lenient "is the gold answer anywhere in the text" metric,
+plain one-shot RAG beats the trained agent (22.0 vs 16.0 on NQ). The base model often
+*knew* the answer from the retrieved passage and just never wrote it in the required
+format. RL mostly taught the agent to *say* answers well, not yet to *find* more of them.
+I would not have known this without building the baseline and a second metric.
 
 ## 6. What I'd tell someone starting
 
@@ -73,5 +88,8 @@ failure types RL removes first. See [reliability.md](reliability.md).
 2. Test "padding must not matter" and "masked tokens get exactly zero gradient" before
    anything else.
 3. Log the *fraction of groups with no signal*. If every sample in a group gets the same
-   reward, that question taught nothing.
-4. TODO: lessons from the real training runs.
+   reward, that question taught nothing. My first search trial was 100% zero-signal.
+4. Score rewards on **policy tokens only**. Search-R1's own invalid-action message
+   contains `<answer>`, and scoring the full text would have paid the model for
+   receiving it.
+5. Always build the dumb baseline, and look at your number with a second metric.
