@@ -144,3 +144,49 @@ A fairer baseline is the base model at max_new_tokens 512 (TODO, optional).
   now read policy tokens only (`Trajectory.policy_text`).
 - Bug: resume crashed on GPU (`torch.set_rng_state` needs a CPU tensor). The checkpoint
   state now loads to CPU.
+
+## 2026-10-13: First search run, Qwen2.5-0.5B-Instruct, Kaggle 2×T4, 90 steps, 2.9 h
+
+Config `configs/search_0.5b_t4.yaml`: 8 prompts × G=8, max_turns 2, answer_tag format reward
+0.1, 8-bit AdamW, ref on cuda:1. Peak GPU0 memory was 12.1 GB (15.1 GB with fp32 Adam).
+Steps took 4.6 min at the start and ~1–2 min later. Metrics: `runs/search_0.5b_t4/metrics.jsonl`.
+Figures: `docs/figures/search_0.5b_t4/`.
+
+Eval during training (greedy, 50 questions per split, ±~5%):
+
+| step | NQ EM | HotpotQA EM | searches/question (NQ) |
+|---|---|---|---|
+| 0 | 0.00 | 0.00 | 0.18 |
+| 25 | 0.02 | 0.08 | 0.00 |
+| 50 | 0.02 | 0.08 | 0.00 |
+| 75 | **0.12** | **0.14** | **1.00** |
+
+Training by phase (means):
+
+| steps | reward | EM | searches | invalid fmt | len | entropy | KL | zero-signal |
+|---|---|---|---|---|---|---|---|---|
+| 1–10 | 0.05 | 0.005 | 0.13 | 0.63 | 464 | 3.21 | 0.04 | 0.28 |
+| 11–30 | 0.14 | 0.044 | 0.03 | 0.09 | 33 | 1.30 | 0.75 | 0.84 |
+| 31–55 | 0.15 | 0.061 | 0.01 | 0.06 | 21 | 1.17 | 0.98 | 0.85 |
+| 56–70 | 0.13 | 0.031 | 0.76 | 0.20 | 336 | 0.86 | 0.95 | 0.73 |
+| 71–90 | 0.22 | 0.134 | 0.92 | 0.10 | 403 | 0.66 | 0.83 | 0.64 |
+
+The run went through two phases:
+1. **Steps ~10–55, the format shortcut.** The model learned to drop reasoning and search and
+   answer at once (`<answer>guess</answer>`, ~20 tokens) to collect the 0.1 format reward.
+   Searches fell to ~0, and 85% of groups had zero signal (all eight samples at 0.1). EM came
+   only from parametric guesses (~5%).
+2. **Steps ~56–60, search discovered.** Searches per trajectory jumped from 0.03 to ~1.0 in
+   five steps. EM dipped while the model explored, then rose to 0.13 (train) and
+   0.12 / 0.14 (eval NQ / HotpotQA at step 75), with exactly one search per question.
+   This is the Search-R1 behaviour emerging from the outcome reward alone.
+
+Caveats and notes:
+- KL is ~0.8–1.0 for most of the run (spikes to 1.9). kl_coef 0.001 does not restrain the
+  policy, the same as on GSM8K.
+- Entropy fell 4.7 → 0.35.
+- The format reward probably *delayed* search. Answering without searching is a stable
+  local optimum: it earns 0.1, and searching costs tokens and risks invalid output.
+  Ablation idea: anneal the format reward to 0 after the model has learned the tags.
+- 50-question evals are noisy, and step 90 was not evaluated (eval_every 25).
+  TODO: evaluate step_000090 on all 500 + 500 questions, plus RAG / direct baselines.
