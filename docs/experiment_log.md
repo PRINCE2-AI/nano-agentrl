@@ -190,3 +190,33 @@ Caveats and notes:
   Ablation idea: anneal the format reward to 0 after the model has learned the tags.
 - 50-question evals are noisy, and step 90 was not evaluated (eval_every 25).
   TODO: evaluate step_000090 on all 500 + 500 questions, plus RAG / direct baselines.
+
+### 2026-10-13: Full eval of the search agent (step 90) and baselines
+
+500 NQ + 500 HotpotQA (the dev_500 subsets), greedy, Qwen2.5-0.5B-Instruct, BM25 top-3, Kaggle T4.
+`gold-in-answer` = a normalized gold answer appears anywhere in the model's own text
+(retrieved `<information>` removed). It is a lenient metric that ignores format.
+
+| method | NQ EM | NQ gold-in-answer | HotpotQA EM | HotpotQA gold-in-answer | invalid fmt |
+|---|---|---|---|---|---|
+| direct (no retrieval) | 0.2 | 13.2 | 0.4 | 17.2 | 0.96–0.99 |
+| RAG (question as query, top-3, one generation) | 0.0 | 22.0 | 0.8 | 27.4 | 0.98–0.99 |
+| ours, GRPO step 90 (`evaluate.py --mode search --max_turns 2`) | 13.0 | 16.0 | 19.6 | 25.4 | 0.00–0.01 |
+| ours, step 90 (`train.py --eval_only`, training config) | 11.8 | – | 19.4 | – | – |
+
+Both "ours" rows use the same checkpoint. The scripts differ in max_obs_tokens (500 vs 400),
+max_total_tokens and batch size. That is a 1.2-point gap on NQ, within ±1.4 s.e.
+
+Findings:
+1. **Strict EM rises from ~0 to 13 / 19.6.** RL taught the protocol (invalid format
+   96–99% → ≤1%) and concise answers inside `<answer>`.
+2. **On the lenient metric the agent does not beat single-step RAG.** NQ is 16.0 vs 22.0,
+   HotpotQA 25.4 vs 27.4. The base model's long RAG answers contain the gold *more often*;
+   it just never states it in the required format. So most of the EM gain is in *stating*
+   answers, not in *finding* more of them.
+3. Possible causes, untested: (a) the agent writes its own BM25 query, while RAG uses the
+   full question, which is a strong BM25 query; (b) gold-in-answer favours long text, and
+   the agent's answers are short; (c) a 0.5B model and only ~35 post-discovery steps.
+   Next checks: compare agent queries against the question for retrieval recall@3; anneal
+   the format reward; train longer; run a few-shot RAG baseline that does emit
+   `<answer>` (a stricter baseline).

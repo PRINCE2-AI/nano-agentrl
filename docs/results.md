@@ -21,6 +21,21 @@ Full GSM8K test set (1,319 questions), greedy, max_new_tokens 300. Trained on a 
 
 Details and caveats: [experiment_log.md](experiment_log.md).
 
+## Milestone 2: search agent (multi-turn GRPO, Qwen2.5-0.5B-Instruct)
+
+500 NQ + 500 HotpotQA (dev_500 subsets), greedy, BM25 top-3 over wiki-18. Trained 90 steps on
+a free Kaggle 2×T4 notebook (`configs/search_0.5b_t4.yaml`, 2.9 h). "gold-in-answer" is the
+lenient metric defined in [experiment_log.md](experiment_log.md).
+
+| Method | NQ EM | NQ gold-in-answer | HotpotQA EM | HotpotQA gold-in-answer |
+|---|---|---|---|---|
+| Direct (no retrieval) | 0.2 | 13.2 | 0.4 | 17.2 |
+| RAG (question as query, one generation) | 0.0 | 22.0 | 0.8 | 27.4 |
+| **nano-AgentRL GRPO, step 90** | **13.0** | 16.0 | **19.6** | 25.4 |
+
+The RL agent is far ahead on strict EM because it learned the answer format, but it does not
+beat RAG on the lenient metric. Read the experiment log before quoting either number.
+
 ## How to fill it in (GPU box, retriever on :8000)
 
 ```bash
