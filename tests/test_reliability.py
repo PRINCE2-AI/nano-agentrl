@@ -227,3 +227,41 @@ def test_reliability_sweep_dry_run(tmp_path):
         )
         == rows
     )
+
+
+def test_reliability_sweep_readonly_ckpts_and_config(tmp_path):
+    """Checkpoints in one dir (e.g. a read-only Kaggle input), outputs in another,
+    rollout limits taken from the training config."""
+    run_dir = tmp_path / "run"
+    train = load_script("train")
+    train.main(
+        [
+            "--config",
+            str(ROOT / "configs/search_0.5b.yaml"),
+            "--dry_run",
+            "--run_dir",
+            str(run_dir),
+            "--set",
+            "eval_every=0",
+        ]
+    )
+    out_dir = tmp_path / "out"
+    sweep = load_script("reliability_sweep")
+    out = sweep.main(
+        [
+            "--run_dir",
+            str(tmp_path / "unused"),
+            "--ckpt_dir",
+            str(run_dir / "checkpoints"),
+            "--out_dir",
+            str(out_dir),
+            "--config",
+            str(ROOT / "configs/search_0.5b_t4.yaml"),
+            "--dry_run",
+            "--max_examples",
+            "2",
+        ]
+    )
+    assert out == out_dir / "reliability.csv" and out.exists()
+    assert (out_dir / "reliability" / "step_000002" / "tinyqa_test.jsonl").exists()
+    assert not (run_dir / "reliability").exists()  # nothing written next to the checkpoints

@@ -42,9 +42,9 @@ from nano_agentrl.generation import Generator  # noqa: E402
 STEP_RE = re.compile(r"step_(\d+)$")
 
 
-def list_checkpoints(run_dir: Path) -> list[tuple[int, Path]]:
+def list_checkpoints(ckpt_dir: Path) -> list[tuple[int, Path]]:
     ckpts = []
-    for p in sorted((run_dir / "checkpoints").glob("step_*")):
+    for p in sorted(ckpt_dir.glob("step_*")):
         m = STEP_RE.search(p.name)
         if m and (p / "config.json").exists():
             ckpts.append((int(m.group(1)), p))
@@ -105,7 +105,24 @@ def write_csv(rows: list[dict], path: Path) -> None:
 
 def main(argv: list[str] | None = None) -> Path:
     parser = argparse.ArgumentParser(description="Reliability sweep over checkpoints")
-    parser.add_argument("--run_dir", required=True)
+    parser.add_argument("--run_dir", required=True, help="training run (or any dir) to sweep")
+    parser.add_argument(
+        "--ckpt_dir",
+        default=None,
+        help="dir with step_* checkpoints (default <run_dir>/checkpoints)",
+    )
+    parser.add_argument(
+        "--out_dir",
+        default=None,
+        help="where records + CSV go (default <run_dir>); use a "
+        "writable dir when the checkpoints are read-only (e.g. a Kaggle input)",
+    )
+    parser.add_argument(
+        "--config",
+        default=None,
+        help="take max_turns / max_new_tokens / max_obs_tokens / "
+        "max_total_tokens / topk from this training config, so eval matches training",
+    )
     parser.add_argument("--split", nargs="+", default=["nq_dev_500"])
     parser.add_argument("--max_examples", type=int, default=200)
     parser.add_argument("--n_samples", type=int, default=8)
@@ -122,6 +139,19 @@ def main(argv: list[str] | None = None) -> Path:
     args = parser.parse_args(argv)
 
     run_dir = Path(args.run_dir)
+    ckpt_dir = Path(args.ckpt_dir) if args.ckpt_dir else run_dir / "checkpoints"
+    out_root = Path(args.out_dir) if args.out_dir else run_dir
+    max_obs_tokens, max_total_tokens = 500, 4096
+    if args.config:
+        from nano_agentrl.config import load_config
+
+        cfg = load_config(args.config)
+        args.max_turns, args.max_new_tokens, args.topk = cfg.max_turns, cfg.max_new_tokens, cfg.topk
+        max_obs_tokens, max_total_tokens = cfg.max_obs_tokens, cfg.max_total_tokens
+        print(
+            f"[sweep] from {args.config}: max_turns {args.max_turns}, max_new_tokens "
+            f"{args.max_new_tokens}, max_obs {max_obs_tokens}, max_total {max_total_tokens}"
+        )
     if args.dry_run:
         from nano_agentrl.retriever.client import TINY_CORPUS, InMemoryRetriever
 
@@ -134,14 +164,14 @@ def main(argv: list[str] | None = None) -> Path:
         retriever = RetrieverClient(args.retriever_url)
     judge = None if args.judge == "none" else make_judge(args.judge, max_turns=args.max_turns)
 
-    ckpts = list_checkpoints(run_dir)
+    ckpts = list_checkpoints(ckpt_dir)
     if not ckpts:
-        raise SystemExit(f"no checkpoints under {run_dir / 'checkpoints'}")
+        raise SystemExit(f"no checkpoints under {ckpt_dir}")
     rows = []
     for step, ckpt in ckpts:
         generator = None
         for split in args.split:
-            rec_path = run_dir / "reliability" / f"step_{step:06d}" / f"{split}.jsonl"
+            rec_path = out_root / "reliability" / f"step_{step:06d}" / f"{split}.jsonl"
             if rec_path.exists():
                 records = load_records(rec_path)
             else:
@@ -162,11 +192,12 @@ def main(argv: list[str] | None = None) -> Path:
                     max_turns=args.max_turns,
                     max_new_tokens=args.max_new_tokens,
                     topk=args.topk,
-                    max_total_tokens=1000 if args.dry_run else 4096,
+                    max_obs_tokens=max_obs_tokens,
+                    max_total_tokens=1000 if args.dry_run else max_total_tokens,
                 )
                 save_records(records, rec_path)
             labelled = (
-                label_failures(records, judge, run_dir / "reliability" / "judge_cache.jsonl")
+                label_failures(records, judge, out_root / "reliability" / "judge_cache.jsonl")
                 if judge
                 else []
             )
@@ -178,7 +209,7 @@ def main(argv: list[str] | None = None) -> Path:
                 f"searches {row['num_searches']:.2f}"
             )
         del generator
-    out = run_dir / "reliability.csv"
+    out = out_root / "reliability.csv"
     write_csv(rows, out)
     print(f"wrote {out}  (labels: {', '.join(LABELS)})")
     return out
