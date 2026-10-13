@@ -68,23 +68,26 @@ tests that compare against slow reference implementations.}
 \section{Reproduction}
 \begin{table}[h]
 \centering
-\begin{tabular}{lcc}
+\begin{tabular}{lcccc}
 \toprule
-Model & NQ EM & HotpotQA EM \\
+Method (Qwen2.5-0.5B-Instruct) & NQ EM & NQ gold-in-ans. & HotpotQA EM & HotpotQA gold-in-ans. \\
 \midrule
-Qwen2.5-3B-Instruct, direct      & \todo{} & \todo{} \\
-Qwen2.5-3B-Instruct, RAG         & \todo{} & \todo{} \\
-Released Search-R1 (3B-it, GRPO) & \todo{} & \todo{} \\
-Ours (3B-it, GRPO)               & \todo{} & \todo{} \\
+Direct (no retrieval)  & 0.2 & 13.2 & 0.4 & 17.2 \\
+RAG (one retrieval)    & 0.0 & 22.0 & 0.8 & 27.4 \\
+Ours, GRPO 90 steps    & \textbf{13.0} & 16.0 & \textbf{19.6} & 25.4 \\
 \bottomrule
 \end{tabular}
-\caption{Exact match on 500-question subsets, greedy decoding, BM25 top-3. \todo{paper numbers for reference}}
+\caption{500 NQ + 500 HotpotQA questions (dev\_500 subsets), greedy, BM25 top-3, trained on a
+free Kaggle 2$\times$T4 notebook in 2.9\,h. Gold-in-answer: a gold answer appears anywhere in
+the model's own text. GSM8K (single-turn GRPO, 200 steps): 32.4 $\to$ 47.9 EM on the full
+test set. \todo{3B results on an 80\,GB GPU; Search-R1 paper numbers for reference}}
 \end{table}
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=0.7\linewidth]{fig1_em_vs_step.pdf}
-\caption{EM vs training step. \todo{caption}}
+\includegraphics[width=0.7\linewidth]{search_0.5b_t4/fig4_searches.pdf}
+\caption{Searches per trajectory during search training: a format shortcut (steps 10--55),
+then abrupt discovery of retrieval around step 56.}
 \end{figure}
 
 \section{Reliability Analysis}
