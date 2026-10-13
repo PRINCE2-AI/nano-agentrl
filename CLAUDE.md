@@ -19,32 +19,14 @@ Reference implementation for *reading only*: https://github.com/PeterGriffinJin/
 (built on verl). We do not import verl. TRL's GRPOTrainer may be used only in
 `scripts/sanity_trl.py` as a sanity check against our own trainer.
 
-## IMPORTANT: learning rules (read before every task)
 
-The owner (Prince) is learning RL through this project. These files are
-**HAND-WRITTEN BY PRINCE**:
+## How this repo was built
 
-- `nano_agentrl/logprobs.py`
-- `nano_agentrl/grpo.py`
-- `nano_agentrl/rollout.py`
-- `scripts/toy_reinforce.py`
+Built with Claude Code as a pair programmer. Prince ran and debugged all experiments
+(Kaggle T4 runs, evaluation, analysis); Claude wrote most of the code. The original plan
+had Prince hand-write the RL core (logprobs.py, grpo.py, rollout.py, toy_reinforce.py);
+that rule was lifted on 2026-10-11 and Claude wrote those files too.
 
-For these files, Claude must NOT write the implementation, even if asked casually.
-Claude MAY:
-- create the file with function signatures, type hints, and detailed docstrings
-  (what the function must do, shapes of every tensor, which paper equation it
-  implements), with the body as `raise NotImplementedError`;
-- write unit tests for them (tests are encouraged — write them first);
-- explain concepts, equations, and PyTorch APIs;
-- review Prince's code and point out bugs as **hints** (say where and why it is
-  wrong, not the corrected code), unless Prince explicitly writes
-  "show me the fix" in that message.
-
-Everything else (retriever server, eval harness, rewards, configs, trainer
-plumbing, logging, plotting, scripts, README, docs) Claude may write fully.
-
-When an explanation is requested, explain in simple English, step by step,
-with a tiny numeric example where possible.
 
 ## Tech stack
 
@@ -66,9 +48,9 @@ nano-agentrl/
 ├── configs/                  # gsm8k_0.5b.yaml, search_0.5b.yaml, search_1.5b.yaml, search_3b.yaml
 ├── nano_agentrl/
 │   ├── config.py             # dataclass config + YAML loader
-│   ├── logprobs.py           # HAND-WRITTEN: per-token log-probs with masks
-│   ├── grpo.py               # HAND-WRITTEN: group advantages + GRPO / Dr.GRPO loss
-│   ├── rollout.py            # HAND-WRITTEN: multi-turn generate → search → continue, loss_mask
+│   ├── logprobs.py           #  per-token log-probs with masks
+│   ├── grpo.py               # : group advantages + GRPO / Dr.GRPO loss
+│   ├── rollout.py            # : multi-turn generate → search → continue, loss_mask
 │   ├── rewards.py            # exact match + format reward
 │   ├── generation.py         # thin wrapper: vLLM or HF generate with stop strings
 │   ├── trainer.py            # main loop, reference model, optimizer, checkpoints, weight sync
@@ -81,7 +63,7 @@ nano-agentrl/
 │       ├── evaluate.py       # run a model/checkpoint over a dataset split
 │       └── failure_taxonomy.py
 ├── scripts/                  # train.py, evaluate.py, plot.py, render_trajectory.py,
-│                             # toy_reinforce.py (HAND-WRITTEN), sanity_trl.py
+│                             # toy_reinforce.py, sanity_trl.py
 ├── tests/
 └── docs/                     # grpo_math.md, results.md, reliability.md, experiment_log.md
 ```
