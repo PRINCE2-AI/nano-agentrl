@@ -176,6 +176,12 @@ retries instead), a GPU-resume crash, and an off-by-one between corpus lines and
   format reward, keep every checkpoint for a full pass^k-over-training curve, and validate
   the failure taxonomy with the Claude judge plus hand labels.
 
+## License
+
+[MIT](LICENSE). The Search-R1 prompt template and environment strings in
+`nano_agentrl/prompts.py` are copied verbatim from
+[Search-R1](https://github.com/PeterGriffinJin/Search-R1) (Apache-2.0) and credited there.
+
 ## Citation
 
 ```bibtex
