@@ -138,7 +138,12 @@ The maths with tiny numeric examples is in [docs/grpo_math.md](docs/grpo_math.md
    one-shot RAG (NQ 16.0 vs 22.0). Untested causes: the agent's self-written BM25 queries
    may be weaker than the raw question, the lenient metric favours long answers, and
    training was short.
-4. **kl_coef 0.001 barely constrains the policy.** KL reached 0.3 on GSM8K and ~1.0 on
+4. **Capable, but not reliable.** With 8 samples per question, the agent solves 21–28% of
+   questions at least once (pass@8) but only 3–4% every time (pass^8). Between steps 75 and
+   90, pass^k grew 2–4× while pass@8 stayed flat: training made it more consistent, not
+   broader. ~70% of failures never retrieve the gold passage.
+   ([reliability analysis](docs/reliability.md))
+5. **kl_coef 0.001 barely constrains the policy.** KL reached 0.3 on GSM8K and ~1.0 on
    search, and entropy collapsed within ~60 steps in both runs.
 
 Bugs found along the way, each with a regression test: reward hacking through environment
@@ -166,9 +171,10 @@ retries instead), a GPU-resume crash, and an off-by-one between corpus lines and
 - Only 0.5B on T4s so far. The 1.5B / 3B configs target one 80 GB GPU and have not been run.
 - BM25 only. Search-R1's headline numbers use E5 dense retrieval.
 - Results are on 500-question subsets, not the full test sets, and come from one seed.
-- Next: the reliability analysis (pass^k over checkpoints, LLM-judged failure taxonomy; the
-  code is in `scripts/reliability_sweep.py`), annealing the format reward, and comparing
-  agent queries against the raw question for retrieval recall.
+- The reliability sweep covers only the last two checkpoints and uses the rule judge.
+- Next: compare retrieval recall@3 of agent queries against the raw question, anneal the
+  format reward, keep every checkpoint for a full pass^k-over-training curve, and validate
+  the failure taxonomy with the Claude judge plus hand labels.
 
 ## Citation
 
