@@ -1,5 +1,10 @@
 # nano-AgentRL
 
+[![tests](https://github.com/PRINCE2-AI/nano-agentrl/actions/workflows/ci.yml/badge.svg)](https://github.com/PRINCE2-AI/nano-agentrl/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)
+![Runs on free Kaggle T4s](https://img.shields.io/badge/GPU-free%20Kaggle%20T4-20BEFF.svg)
+
 **A from-scratch, readable re-implementation of [Search-R1](https://arxiv.org/abs/2503.09516):
 GRPO that teaches a small LLM to reason, call a search engine, and answer. It is trained
 end to end on free Kaggle GPUs, and the results are checked honestly.**
