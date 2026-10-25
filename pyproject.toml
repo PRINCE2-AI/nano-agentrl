@@ -44,7 +44,8 @@ addopts = "--basetemp=.pytest_tmp"
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-extend-exclude = [".venv"]
+# Notebook cells are shell magics and prose, not importable Python.
+extend-exclude = [".venv", "notebooks"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]

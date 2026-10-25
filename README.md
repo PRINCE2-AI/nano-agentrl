@@ -62,6 +62,9 @@ pipeline (multi-turn rollouts, loss masks, GRPO update, eval, checkpoint, resume
 
 ### Reproduce on a free Kaggle notebook (2× T4)
 
+Prefer clicking to copy-pasting? [`notebooks/nano_agentrl_kaggle.ipynb`](notebooks/nano_agentrl_kaggle.ipynb)
+is this whole recipe as a runnable notebook — on Kaggle, *File → Import Notebook*.
+
 Notebook settings: *GPU T4 x2*, *Internet on*. One cell each:
 
 ```python
