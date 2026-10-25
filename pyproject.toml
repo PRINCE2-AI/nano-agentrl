@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nano-agentrl"
-version = "0.0.1"
+version = "0.1.0"
 description = "Minimal from-scratch re-implementation of Search-R1 (multi-turn GRPO with search)."
 readme = "README.md"
 license = { text = "MIT" }

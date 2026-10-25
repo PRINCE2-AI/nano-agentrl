@@ -33,7 +33,7 @@ def write_inputs(tmp_path: Path) -> tuple[Path, Path, Path]:
 
     rel = tmp_path / "reliability.csv"
     fields = (
-        ["step", "split", "pass_at_1"]
+        ["step", "split", "pass_at_1", "pass_at_8"]
         + [f"pass_hat_{k}" for k in (1, 2, 4, 8)]
         + [f"fail_{lab}" for lab in plot.FAILURE_LABELS]
     )
@@ -46,6 +46,7 @@ def write_inputs(tmp_path: Path) -> tuple[Path, Path, Path]:
                 "step": step,
                 "split": "nq_dev_500",
                 "pass_at_1": acc,
+                "pass_at_8": acc * 2.5,
                 "pass_hat_1": acc,
                 "pass_hat_2": acc * 0.8,
                 "pass_hat_4": acc * 0.6,
@@ -71,6 +72,7 @@ def test_all_figures_written(tmp_path):
     )
     names = {p.stem for p in out}
     assert names == {
+        "fig0_capability_vs_consistency",
         "fig1_em_vs_step",
         "fig2_pass_hat_k",
         "fig3_acc_vs_reliability",

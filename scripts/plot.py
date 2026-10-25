@@ -262,7 +262,7 @@ def fig_acc_vs_reliability(rel: list[dict], out_dir: Path, split: str) -> list[P
 def fig_capability_vs_consistency(rel: list[dict], out_dir: Path) -> list[Path] | None:
     """Last checkpoint per split: pass@1, pass@k (capability ceiling), pass^k (consistency)."""
     kmax = max((k for k in K_RAMP if any(f"pass_hat_{k}" in r for r in rel)), default=None)
-    if kmax is None:
+    if kmax is None or not all(f"pass_at_{kmax}" in r for r in rel):
         return None
     rows = [
         max((r for r in rel if r["split"] == s), key=lambda r: r["step"])
@@ -416,7 +416,8 @@ def main(argv: list[str] | None = None) -> list[Path]:
     if args.reliability:
         rel = load_reliability(args.reliability)
         split = args.split or rel[0]["split"]
-        for fn in (fig_capability_vs_consistency, fig_pass_hat_k, fig_acc_vs_reliability, fig_failure_taxonomy):
+        written += fig_capability_vs_consistency(rel, out_dir) or []
+        for fn in (fig_pass_hat_k, fig_acc_vs_reliability, fig_failure_taxonomy):
             written += fn(rel, out_dir, split) or []
     for p in written:
         print(f"wrote {p}")
