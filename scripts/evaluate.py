@@ -15,7 +15,9 @@ Examples (GPU box, retriever running on :8000):
 
 Writes <out_dir>/<split>_<mode>.jsonl (one record per question x sample) and
 <out_dir>/summary.json, and upserts the EM into docs/results.json / docs/results.md
-(greedy single-sample runs only).
+(greedy single-sample runs only). The rollout protocol is recorded in every summary so a
+number can be traced back to the turns/token limits that produced it. Pass --config to
+inherit those limits from the training YAML.
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from nano_agentrl.config import load_config  # noqa: E402
 from nano_agentrl.data import load_split  # noqa: E402
 from nano_agentrl.eval.evaluate import (  # noqa: E402
     MODES,
@@ -40,6 +43,15 @@ from nano_agentrl.eval.evaluate import (  # noqa: E402
 from nano_agentrl.generation import Generator  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
+# Used only when neither the CLI nor --config supplies a value.
+DEFAULT_PROTOCOL = {
+    "max_turns": 4,
+    "max_new_tokens": 500,
+    "max_obs_tokens": 500,
+    "max_total_tokens": 4096,
+    "topk": 3,
+    "retriever_url": "http://127.0.0.1:8000",
+}
 
 
 def load_model(ckpt: str, device: str, use_vllm: bool):
@@ -61,16 +73,21 @@ def load_model(ckpt: str, device: str, use_vllm: bool):
 def main(argv: list[str] | None = None) -> dict:
     parser = argparse.ArgumentParser(description="Evaluate a model on QA splits")
     parser.add_argument("--ckpt", default=None, help="checkpoint dir or HF model id")
-    parser.add_argument("--split", nargs="+", default=["nq_dev_500"])
+    parser.add_argument(
+        "--config", default=None, help="training YAML to inherit rollout limits from"
+    )
+    parser.add_argument("--split", nargs="+", default=None)
     parser.add_argument("--mode", choices=MODES, default="search")
     parser.add_argument("--n_samples", type=int, default=1)
     parser.add_argument("--temperature", type=float, default=0.0, help="0 = greedy")
     parser.add_argument("--max_examples", type=int, default=None)
-    parser.add_argument("--max_turns", type=int, default=4)
-    parser.add_argument("--max_new_tokens", type=int, default=500)
-    parser.add_argument("--topk", type=int, default=3)
+    parser.add_argument("--max_turns", type=int, default=None)
+    parser.add_argument("--max_new_tokens", type=int, default=None)
+    parser.add_argument("--max_obs_tokens", type=int, default=None)
+    parser.add_argument("--max_total_tokens", type=int, default=None)
+    parser.add_argument("--topk", type=int, default=None)
     parser.add_argument("--batch_size", type=int, default=32)
-    parser.add_argument("--retriever_url", default="http://127.0.0.1:8000")
+    parser.add_argument("--retriever_url", default=None)
     parser.add_argument("--use_vllm", action="store_true")
     parser.add_argument("--device", default="auto")
     parser.add_argument("--out_dir", default=None)
@@ -81,6 +98,17 @@ def main(argv: list[str] | None = None) -> dict:
     parser.add_argument("--dry_run", action="store_true", help="tiny model + in-memory corpus")
     args = parser.parse_args(argv)
 
+    inherited = load_config(args.config) if args.config else None
+
+    def resolved(key: str):
+        value = getattr(args, key)
+        if value is not None:
+            return value
+        return getattr(inherited, key) if inherited else DEFAULT_PROTOCOL[key]
+
+    protocol = {key: resolved(key) for key in DEFAULT_PROTOCOL}
+    splits = args.split or (inherited.eval_splits if inherited else ["nq_dev_500"])
+
     if args.dry_run:
         from nano_agentrl.retriever.client import TINY_CORPUS, InMemoryRetriever
         from nano_agentrl.tiny import make_char_tokenizer, make_tiny_model
@@ -89,7 +117,10 @@ def main(argv: list[str] | None = None) -> dict:
         generator = Generator(make_tiny_model(len(tokenizer)).eval(), tokenizer)
         retriever = InMemoryRetriever(TINY_CORPUS)
         name = args.name or "tiny-random-gpt2"
-        args.max_new_tokens = min(args.max_new_tokens, 16)
+        # Tiny GPT-2 has 1024 positions; keep prompt + observations inside that window.
+        protocol["max_new_tokens"] = min(protocol["max_new_tokens"], 16)
+        protocol["max_obs_tokens"] = min(protocol["max_obs_tokens"], 200)
+        protocol["max_total_tokens"] = min(protocol["max_total_tokens"], 1000)
     else:
         if not args.ckpt:
             parser.error("--ckpt is required (or use --dry_run)")
@@ -98,12 +129,30 @@ def main(argv: list[str] | None = None) -> dict:
         if args.mode != "direct":
             from nano_agentrl.retriever.client import RetrieverClient
 
-            retriever = RetrieverClient(args.retriever_url)
+            retriever = RetrieverClient(protocol["retriever_url"])
         name = args.name or args.ckpt.rstrip("/").split("/")[-1]
+
+    protocol_record = {
+        **protocol,
+        "checkpoint": args.ckpt,
+        "name": name,
+        "mode": args.mode,
+        "config": str(args.config) if args.config else None,
+        "n_samples": args.n_samples,
+        "temperature": args.temperature,
+        "batch_size": args.batch_size,
+        "max_examples": args.max_examples,
+        "dry_run": args.dry_run,
+    }
+    print(
+        f"protocol: mode={args.mode} turns={protocol['max_turns']} "
+        f"new_tokens={protocol['max_new_tokens']} obs_tokens={protocol['max_obs_tokens']} "
+        f"total_tokens={protocol['max_total_tokens']} topk={protocol['topk']}"
+    )
 
     out_dir = Path(args.out_dir or ROOT / "runs/eval" / name)
     summaries = {}
-    for split in args.split:
+    for split in splits:
         examples = load_split(split, args.max_examples)
         start = time.time()
         records = evaluate_examples(
@@ -115,11 +164,16 @@ def main(argv: list[str] | None = None) -> dict:
             n_samples=args.n_samples,
             temperature=args.temperature,
             batch_size=args.batch_size,
-            max_turns=args.max_turns,
-            max_new_tokens=args.max_new_tokens,
-            topk=args.topk,
+            max_turns=protocol["max_turns"],
+            max_new_tokens=protocol["max_new_tokens"],
+            topk=protocol["topk"],
+            max_obs_tokens=protocol["max_obs_tokens"],
+            max_total_tokens=protocol["max_total_tokens"],
         )
-        summary = summarize(records) | {"seconds": time.time() - start}
+        summary = summarize(records) | {
+            "seconds": time.time() - start,
+            "protocol": protocol_record,
+        }
         save_records(records, out_dir / f"{split}_{args.mode}.jsonl")
         summaries[split] = summary
         print(
@@ -127,7 +181,12 @@ def main(argv: list[str] | None = None) -> dict:
             f"(n={summary['num_questions']}), searches {summary['num_searches']:.2f}, "
             f"invalid format {summary['invalid_format_rate']:.2f}"
         )
-        if args.n_samples == 1 and args.temperature == 0 and not args.no_results_table:
+        if (
+            args.n_samples == 1
+            and args.temperature == 0
+            and not args.no_results_table
+            and not args.dry_run
+        ):
             update_results(
                 args.results_json,
                 args.results_md,
@@ -138,6 +197,7 @@ def main(argv: list[str] | None = None) -> dict:
                     "em": summary["em"],
                     "n": summary["num_questions"],
                     "date": date.today().isoformat(),
+                    "protocol": protocol_record,
                 },
             )
     out_dir.mkdir(parents=True, exist_ok=True)
