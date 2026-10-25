@@ -165,6 +165,9 @@ The maths with tiny numeric examples is in [docs/grpo_math.md](docs/grpo_math.md
 5. **kl_coef 0.001 barely constrains the policy.** KL reached 0.3 on GSM8K and ~1.0 on
    search, and entropy collapsed within ~60 steps in both runs.
 
+The same numbers, with the reliability table and the failure taxonomy in full, are in
+[report/main.tex](report/main.tex) (LaTeX; not yet compiled into a PDF).
+
 Bugs found along the way, each with a regression test: reward hacking through environment
 text, wrong log-probs under left padding, an EOS that ended episodes early (Search-R1
 retries instead), a GPU-resume crash, and an off-by-one between corpus lines and index ids.
