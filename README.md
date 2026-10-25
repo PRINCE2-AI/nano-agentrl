@@ -181,6 +181,14 @@ retries instead), a GPU-resume crash, and an off-by-one between corpus lines and
   format reward, keep every checkpoint for a full pass^k-over-training curve, and validate
   the failure taxonomy with the Claude judge plus hand labels.
 
+## Following the work
+
+The measurement problems that only show up once an agent meets real work end up in
+**The Reliable Agent**, a newsletter on production systems engineering for AI agents.
+
+- [Why your agent eval passes locally and fails in production](https://thereliableagent.substack.com/p/why-your-agent-eval-passes-locally) — how a reliability score can be green and mean nothing, written against a scorer whose coverage metric only checked that a policy event existed.
+- [Subscribe](https://thereliableagent.substack.com) — free posts on agent reliability; the paid tier adds runnable failure cases, eval harnesses, and teardowns.
+
 ## License
 
 [MIT](LICENSE). The Search-R1 prompt template and environment strings in
