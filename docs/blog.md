@@ -1,6 +1,9 @@
 # What broke and what I learned re-implementing Search-R1
 
-*Draft. Every number here comes from a real run on a free Kaggle 2× T4 notebook.*
+*Published on The Reliable Agent as part of
+[Pass@8 was 28%. Pass^8 was 4%](https://thereliableagent.substack.com/p/pass8-was-28-pass8-was-4-same-model);
+the bug section below is reused almost verbatim. Every number here comes from a real run on a
+free Kaggle 2× T4 notebook.*
 
 I wanted to understand how a language model learns to *use a tool* through reinforcement
 learning. So I re-implemented [Search-R1](https://arxiv.org/abs/2503.09516) from scratch.
