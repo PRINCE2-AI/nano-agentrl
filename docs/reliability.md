@@ -84,6 +84,7 @@ Caveats: two checkpoints only, one seed, 100 questions per split (pass@1 ±~1–
 
 Next:
 - Retrieval recall@3 of the agent's query vs the raw question (tests finding 4 and the RAG
-  gap).
+  gap). Tooling is in `scripts/retrieval_recall.py`; it needs the retriever server and a
+  GPU sweep to fill in.
 - A run with `keep_last_checkpoints: 0` so the sweep can trace pass^k across the whole run.
 - Claude judge + 50 hand labels to validate the taxonomy.

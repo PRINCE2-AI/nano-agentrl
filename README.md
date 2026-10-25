@@ -53,7 +53,7 @@ in *stating* answers cleanly, not yet in *finding* more of them. See
 
 ```bash
 pip install -e ".[dev]"                                                   # 1. install
-pytest -q                                                                 # 2. 172 tests, CPU, ~30 s
+pytest -q                                                                 # 2. 178 tests, CPU, ~30 s
 python scripts/train.py --config configs/search_0.5b.yaml --dry_run       # 3. tiny end-to-end run
 ```
 
@@ -95,6 +95,15 @@ Evaluate a checkpoint or the base model:
 python scripts/train.py --config configs/search_0.5b_t4.yaml --eval_only --ckpt <dir|base> \
     --set eval_num_examples=500
 python scripts/evaluate.py --ckpt Qwen/Qwen2.5-0.5B-Instruct --mode rag --split nq_dev_500
+```
+
+Was it the retriever or the policy? `retrieval_recall.py` asks BM25 for the gold passage
+twice: once with the raw question, once with the query the agent actually wrote.
+
+```bash
+python scripts/retrieval_recall.py --split nq_dev_500 --max_examples 100   # question only
+python scripts/retrieval_recall.py --split nq_dev_500 \
+    --records runs/search_0.5b_t4/reliability/90/nq_dev_500.jsonl          # question vs agent
 ```
 
 ## How it works
@@ -173,7 +182,7 @@ retries instead), a GPU-resume crash, and an off-by-one between corpus lines and
 | [nano_agentrl/prompts.py](nano_agentrl/prompts.py) | Search-R1 prompt and environment strings, copied verbatim |
 | [nano_agentrl/retriever/](nano_agentrl/retriever/) | FastAPI BM25 server (Pyserini / rank_bm25) and client |
 | [nano_agentrl/eval/](nano_agentrl/eval/) | EM, pass@k / pass^k, evaluation harness, failure taxonomy |
-| [scripts/](scripts/) | train, evaluate, reliability sweep, plots, ablations, trajectory viewer, Kaggle setup |
+| [scripts/](scripts/) | train, evaluate, reliability sweep, retrieval recall@3, plots, ablations, trajectory viewer, Kaggle setup |
 | [configs/](configs/) | GSM8K and search configs for one T4 notebook or one 80 GB GPU (0.5B / 1.5B / 3B) |
 
 ## Limitations and next steps
