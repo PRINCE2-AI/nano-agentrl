@@ -7,16 +7,17 @@
 
 **A from-scratch, readable re-implementation of [Search-R1](https://arxiv.org/abs/2503.09516):
 GRPO that teaches a small LLM to reason, call a search engine, and answer. It is trained
-end to end on free Kaggle GPUs, and the results are checked honestly.**
+end to end on free Kaggle GPUs — and then measured for reliability, not only for accuracy.**
 
 The core RL loop (log-probs, GRPO, multi-turn rollouts, trainer, generation, rewards) is
 ~1,400 lines of PyTorch with 172 CPU tests. No verl, and no TRL in the trainer.
 
-![A 0.5B model discovers search during GRPO training](docs/figures/search_0.5b_t4/fig4_searches.png)
+![Capability vs consistency: pass@8 is 21-28%, pass^8 is 3-4%](docs/figures/search_0.5b_t4/fig0_capability_vs_consistency.png)
 
-*Qwen2.5-0.5B-Instruct during search training. For ~45 steps it exploits a format shortcut
-(answer at once, never search). Then, around step 56, it discovers retrieval and settles on
-one search per question. Nothing tells it to search; the only reward is the final answer.*
+*Qwen2.5-0.5B-Instruct after 90 steps of search training. Eight samples per question: the
+agent answers 21% (NQ) to 28% (HotpotQA) of questions correctly at least once, but only
+3–4% of them every time. Sampling recovers about what one-shot RAG already "contains", so
+the ceiling looks set by retrieval, not by the policy.*
 
 ## Results
 
@@ -139,6 +140,7 @@ The maths with tiny numeric examples is in [docs/grpo_math.md](docs/grpo_math.md
 2. **Search: a format shortcut, then discovery.** A 0.1 format reward bootstrapped the
    protocol but created a stable local optimum (answer instantly, never search) for
    ~45 steps. Search appeared abruptly at step ~56, and EM followed.
+   ([figure](docs/figures/search_0.5b_t4/fig4_searches.png))
 3. **Better format is not better retrieval.** On a format-agnostic metric the agent trails
    one-shot RAG (NQ 16.0 vs 22.0). Untested causes: the agent's self-written BM25 queries
    may be weaker than the raw question, the lenient metric favours long answers, and
@@ -147,7 +149,7 @@ The maths with tiny numeric examples is in [docs/grpo_math.md](docs/grpo_math.md
    questions at least once (pass@8) but only 3–4% every time (pass^8). Between steps 75 and
    90, pass^k grew 2–4× while pass@8 stayed flat: training made it more consistent, not
    broader. ~70% of failures never retrieve the gold passage.
-   ([reliability analysis](docs/reliability.md))
+   ([reliability analysis](docs/reliability.md), [write-up](https://thereliableagent.substack.com/p/pass8-was-28-pass8-was-4-same-model))
 5. **kl_coef 0.001 barely constrains the policy.** KL reached 0.3 on GSM8K and ~1.0 on
    search, and entropy collapsed within ~60 steps in both runs.
 
@@ -186,6 +188,7 @@ retries instead), a GPU-resume crash, and an off-by-one between corpus lines and
 The measurement problems that only show up once an agent meets real work end up in
 **The Reliable Agent**, a newsletter on production systems engineering for AI agents.
 
+- [Pass@8 was 28%. Pass^8 was 4%. Same model.](https://thereliableagent.substack.com/p/pass8-was-28-pass8-was-4-same-model) — the reliability analysis in this repo, written up: the four bugs that made the first number wrong, and why most failures are retrieval, not reasoning.
 - [Why your agent eval passes locally and fails in production](https://thereliableagent.substack.com/p/why-your-agent-eval-passes-locally) — how a reliability score can be green and mean nothing, written against a scorer whose coverage metric only checked that a policy event existed.
 - [Subscribe](https://thereliableagent.substack.com) — free posts on agent reliability; the paid tier adds runnable failure cases, eval harnesses, and teardowns.
 

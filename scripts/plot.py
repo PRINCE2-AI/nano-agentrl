@@ -14,6 +14,7 @@ Figures (each saved as .png and .pdf):
     3. fig3_acc_vs_reliability  pass@1 (accuracy) vs pass^k (reliability), path in step order
     4. fig4_searches            searches per question vs step (train, smoothed)
     5. fig5_failure_taxonomy    failure-label shares per checkpoint (stacked bars)
+    6. fig0_capability_vs_consistency  pass@1 vs pass@k vs pass^k at the last checkpoint
 
 Colour follows the dataviz reference palette: categorical slots in fixed order, a single
 validated ordinal ramp for k, one y-axis per figure, hairline grid, direct labels plus a
@@ -258,6 +259,38 @@ def fig_acc_vs_reliability(rel: list[dict], out_dir: Path, split: str) -> list[P
     return save(fig, out_dir, "fig3_acc_vs_reliability")
 
 
+def fig_capability_vs_consistency(rel: list[dict], out_dir: Path) -> list[Path] | None:
+    """Last checkpoint per split: pass@1, pass@k (capability ceiling), pass^k (consistency)."""
+    kmax = max((k for k in K_RAMP if any(f"pass_hat_{k}" in r for r in rel)), default=None)
+    if kmax is None:
+        return None
+    rows = [
+        max((r for r in rel if r["split"] == s), key=lambda r: r["step"])
+        for s in sorted({r["split"] for r in rel})
+    ]
+    names = {"nq": "NQ", "hotpotqa": "HotpotQA"}
+    metrics = [
+        ("pass_at_1", "pass@1", K_RAMP[1]),
+        (f"pass_at_{kmax}", f"pass@{kmax}", SERIES[0]),
+        (f"pass_hat_{kmax}", f"pass^{kmax}", SERIES[1]),
+    ]
+    fig, ax = plt.subplots(figsize=(5.4, 3.0))
+    x = np.arange(len(rows), dtype=float)
+    width = 0.26
+    for i, (key, label, color) in enumerate(metrics):
+        vals = np.array([r.get(key, np.nan) for r in rows], dtype=float)
+        bars = ax.bar(x + (i - 1) * width, vals, width=width * 0.9, color=color, label=label)
+        ax.bar_label(bars, labels=[f"{v:.0%}" for v in vals], padding=2, fontsize=7, color=INK_2)
+    ax.set_xticks(x, [names.get(r["split"].removesuffix("_dev_500"), r["split"]) for r in rows])
+    ax.set_title(f"Capability vs consistency at the last checkpoint (k = {kmax})")
+    ax.set_ylabel("share of questions")
+    percent_axis(ax)
+    ax.set_ylim(0, 0.35)
+    ax.grid(axis="x", visible=False)
+    ax.legend(loc="upper left", ncol=3)
+    return save(fig, out_dir, "fig0_capability_vs_consistency")
+
+
 def fig_searches(runs: dict[str, list[dict]], out_dir: Path, window: int) -> list[Path] | None:
     fig, ax = plt.subplots(figsize=(5.2, 3.0))
     drawn = 0
@@ -383,7 +416,7 @@ def main(argv: list[str] | None = None) -> list[Path]:
     if args.reliability:
         rel = load_reliability(args.reliability)
         split = args.split or rel[0]["split"]
-        for fn in (fig_pass_hat_k, fig_acc_vs_reliability, fig_failure_taxonomy):
+        for fn in (fig_capability_vs_consistency, fig_pass_hat_k, fig_acc_vs_reliability, fig_failure_taxonomy):
             written += fn(rel, out_dir, split) or []
     for p in written:
         print(f"wrote {p}")

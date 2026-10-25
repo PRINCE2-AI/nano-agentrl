@@ -42,7 +42,10 @@ Sweep: checkpoints at steps 75 and 90 of `configs/search_0.5b_t4.yaml` (only the
 were kept). 100 NQ + 100 HotpotQA questions (from the dev_500 subsets), 8 samples each at
 temperature 1.0, with the rollout limits of training (2 turns, 300 tokens/turn), and the
 rule judge. Data: `runs/search_0.5b_t4/reliability.csv`. Figures:
-`docs/figures/search_0.5b_t4/reliability_*`.
+`docs/figures/search_0.5b_t4/reliability_*` and
+[fig0_capability_vs_consistency](figures/search_0.5b_t4/fig0_capability_vs_consistency.png)
+(pass@1 vs pass@8 vs pass^8, drawn by `scripts/plot.py` from the machine-readable
+[reliability_summary.csv](reliability_summary.csv)).
 
 | step | split | pass@1 | pass@8 | pass^4 | pass^8 | searches | invalid fmt |
 |---|---|---|---|---|---|---|---|
