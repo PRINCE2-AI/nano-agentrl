@@ -1,4 +1,4 @@
-% nano-AgentRL report skeleton (arXiv style, single column).
+% nano-AgentRL report draft (arXiv style, single column).
 % Build: pdflatex main && bibtex main && pdflatex main && pdflatex main
 % Every \todo{} marks a number or claim that must come from a real run.
 \documentclass[11pt]{article}
@@ -46,8 +46,8 @@ This report asks whether RL training on a search agent buys consistency or only 
 We contribute:
 (1) a minimal, readable GRPO trainer for multi-turn search agents, about 1{,}600 lines of
 PyTorch, no verl and no TRL in the training loop, with 178 CPU tests;
-(2) a reproduction of Search-R1 on hardware anyone can use for free, one 2$\times$T4 Kaggle
-notebook for 2.9 hours;
+(2) a reproduction of Search-R1 on hardware anyone can use for free: one 2$\times$T4 Kaggle
+notebook, 2.9 hours of training;
 (3) a reliability analysis across training, where capability and consistency move apart, and
 a failure taxonomy that localises the gap to retrieval.
 
