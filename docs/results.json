@@ -1,0 +1,64 @@
+[
+  {
+    "model": "Qwen2.5-0.5B-Instruct",
+    "mode": "direct",
+    "split": "nq_dev_500",
+    "em": 0.002,
+    "n": 500,
+    "date": "2026-10-13",
+    "source": "docs/experiment_log.md: full eval of the search agent (step 90) and baselines",
+    "note": "Backfilled after the run; the original eval did not write results.json."
+  },
+  {
+    "model": "Qwen2.5-0.5B-Instruct",
+    "mode": "direct",
+    "split": "hotpotqa_dev_500",
+    "em": 0.004,
+    "n": 500,
+    "date": "2026-10-13",
+    "source": "docs/experiment_log.md: full eval of the search agent (step 90) and baselines",
+    "note": "Backfilled after the run; the original eval did not write results.json."
+  },
+  {
+    "model": "Qwen2.5-0.5B-Instruct",
+    "mode": "rag",
+    "split": "nq_dev_500",
+    "em": 0.0,
+    "n": 500,
+    "date": "2026-10-13",
+    "source": "docs/experiment_log.md: full eval of the search agent (step 90) and baselines",
+    "note": "Backfilled after the run; the original eval did not write results.json."
+  },
+  {
+    "model": "Qwen2.5-0.5B-Instruct",
+    "mode": "rag",
+    "split": "hotpotqa_dev_500",
+    "em": 0.008,
+    "n": 500,
+    "date": "2026-10-13",
+    "source": "docs/experiment_log.md: full eval of the search agent (step 90) and baselines",
+    "note": "Backfilled after the run; the original eval did not write results.json."
+  },
+  {
+    "model": "nano-agentrl-grpo-step90",
+    "mode": "search",
+    "split": "nq_dev_500",
+    "em": 0.13,
+    "n": 500,
+    "date": "2026-10-13",
+    "source": "docs/experiment_log.md: full eval of the search agent (step 90) and baselines",
+    "note": "Backfilled after the run; the original eval did not write results.json.",
+    "protocol_note": "evaluate.py --mode search --max_turns 2; max_obs_tokens 500 and max_total_tokens 4096 were the script defaults."
+  },
+  {
+    "model": "nano-agentrl-grpo-step90",
+    "mode": "search",
+    "split": "hotpotqa_dev_500",
+    "em": 0.196,
+    "n": 500,
+    "date": "2026-10-13",
+    "source": "docs/experiment_log.md: full eval of the search agent (step 90) and baselines",
+    "note": "Backfilled after the run; the original eval did not write results.json.",
+    "protocol_note": "evaluate.py --mode search --max_turns 2; max_obs_tokens 500 and max_total_tokens 4096 were the script defaults."
+  }
+]

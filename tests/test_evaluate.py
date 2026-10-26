@@ -142,4 +142,83 @@ def test_evaluate_cli_dry_run(tmp_path):
     )
     assert summaries["tinyqa_test"]["num_questions"] == 6
     assert (tmp_path / "out/tinyqa_test_search.jsonl").exists()
-    assert "tiny-random-gpt2" in (tmp_path / "r.md").read_text(encoding="utf-8")
+    # A tiny random model must never land in the published results table.
+    assert not (tmp_path / "r.json").exists()
+    assert not (tmp_path / "r.md").exists()
+
+
+def test_evaluate_cli_records_protocol(tmp_path):
+    summaries = evaluate_script.main(
+        [
+            "--dry_run",
+            "--mode",
+            "search",
+            "--split",
+            "tinyqa_test",
+            "--max_turns",
+            "1",
+            "--max_new_tokens",
+            "8",
+            "--max_obs_tokens",
+            "100",
+            "--max_total_tokens",
+            "900",
+            "--topk",
+            "2",
+            "--out_dir",
+            str(tmp_path / "out"),
+            "--no_results_table",
+        ]
+    )
+    protocol = summaries["tinyqa_test"]["protocol"]
+    assert protocol["max_turns"] == 1
+    assert protocol["max_new_tokens"] == 8
+    assert protocol["max_obs_tokens"] == 100
+    assert protocol["max_total_tokens"] == 900
+    assert protocol["topk"] == 2
+    assert protocol["dry_run"] is True
+    saved = json.loads((tmp_path / "out/summary.json").read_text(encoding="utf-8"))
+    assert saved["tinyqa_test"]["protocol"] == protocol
+
+
+def test_evaluate_cli_inherits_protocol_from_config(tmp_path):
+    summaries = evaluate_script.main(
+        [
+            "--dry_run",
+            "--mode",
+            "search",
+            "--config",
+            str(ROOT / "configs/search_0.5b_t4.yaml"),
+            "--split",
+            "tinyqa_test",
+            "--out_dir",
+            str(tmp_path / "out"),
+            "--no_results_table",
+        ]
+    )
+    protocol = summaries["tinyqa_test"]["protocol"]
+    assert protocol["max_turns"] == 2
+    assert protocol["max_obs_tokens"] == 200  # dry-run cap for the tiny 1024-position model
+    assert protocol["max_total_tokens"] == 1000
+    assert protocol["max_new_tokens"] == 16  # dry-run cap wins over the config's 300
+    assert protocol["config"].endswith("search_0.5b_t4.yaml")
+
+
+def test_evaluate_cli_flags_override_config(tmp_path):
+    summaries = evaluate_script.main(
+        [
+            "--dry_run",
+            "--mode",
+            "search",
+            "--config",
+            str(ROOT / "configs/search_0.5b_t4.yaml"),
+            "--split",
+            "tinyqa_test",
+            "--max_turns",
+            "1",
+            "--out_dir",
+            str(tmp_path / "out"),
+            "--no_results_table",
+        ]
+    )
+    assert summaries["tinyqa_test"]["protocol"]["max_turns"] == 1
