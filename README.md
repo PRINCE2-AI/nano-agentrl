@@ -10,7 +10,7 @@ GRPO that teaches a small LLM to reason, call a search engine, and answer. It is
 end to end on free Kaggle GPUs — and then measured for reliability, not only for accuracy.**
 
 The core RL loop (log-probs, GRPO, multi-turn rollouts, trainer, generation, rewards) is
-~1,600 lines of PyTorch with 178 CPU tests. No verl, and no TRL in the trainer.
+~1,500 lines of PyTorch with 180 CPU tests. No verl, and no TRL in the trainer.
 
 ![Capability vs consistency: pass@8 is 21-28%, pass^8 is 3-4%](docs/figures/search_0.5b_t4/fig0_capability_vs_consistency.png)
 
@@ -53,7 +53,7 @@ in *stating* answers cleanly, not yet in *finding* more of them. See
 
 ```bash
 pip install -e ".[dev]"                                                   # 1. install
-pytest -q                                                                 # 2. 178 tests, CPU, ~30 s
+pytest -q                                                                 # 2. 180 tests, CPU, ~30 s
 python scripts/train.py --config configs/search_0.5b.yaml --dry_run       # 3. tiny end-to-end run
 ```
 
